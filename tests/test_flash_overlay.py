@@ -64,8 +64,12 @@ class TestShowCaptureFlash:
     def test_empty_monitor_rects_skips_thread(self, monkeypatch):
         """Full-screen path with zero monitors must not start a thread."""
         monkeypatch.delenv("WINDOWS_MCP_DISABLE_FLASH", raising=False)
-        fake_uia = type("fake_uia", (), {"GetMonitorsRect": staticmethod(lambda: [])})
-        monkeypatch.setitem(sys.modules, "windows_mcp.uia", fake_uia)
+        # Patch on the real uia module — ``import windows_mcp.uia as uia`` resolves
+        # via the cached parent-package attribute once another test has imported
+        # the package, so monkeypatching sys.modules is not reliable on its own.
+        import windows_mcp.uia
+
+        monkeypatch.setattr(windows_mcp.uia, "GetMonitorsRect", lambda: [])
         with patch.object(threading, "Thread") as fake_thread:
             flash_overlay.show_capture_flash(None)
         fake_thread.assert_not_called()
@@ -102,16 +106,13 @@ class TestShowCaptureFlash:
     def test_full_screen_capture_enumerates_monitors(self, monkeypatch):
         """When capture_rect is None the helper must read uia.GetMonitorsRect."""
         monkeypatch.delenv("WINDOWS_MCP_DISABLE_FLASH", raising=False)
-        fake_uia = type(
-            "fake_uia",
-            (),
-            {
-                "GetMonitorsRect": staticmethod(
-                    lambda: [_FakeRect(0, 0, 1920, 1080), _FakeRect(1920, 0, 3840, 1080)]
-                )
-            },
+        import windows_mcp.uia
+
+        monkeypatch.setattr(
+            windows_mcp.uia,
+            "GetMonitorsRect",
+            lambda: [_FakeRect(0, 0, 1920, 1080), _FakeRect(1920, 0, 3840, 1080)],
         )
-        monkeypatch.setitem(sys.modules, "windows_mcp.uia", fake_uia)
 
         captured = {}
 
