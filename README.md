@@ -82,9 +82,9 @@ mcp-name: io.github.CursorTouch/Windows-MCP
 Run the server directly when needed:
 
 ```shell
-uvx windows-mcp
-uvx windows-mcp --transport sse --host localhost --port 8000
-uvx windows-mcp --transport streamable-http --host localhost --port 8000
+uvx windows-mcp serve
+uvx windows-mcp serve --transport sse --host localhost --port 8000
+uvx windows-mcp serve --transport streamable-http --host localhost --port 8000
 ```
 
 Install it as a background task that starts now and at every login:
@@ -384,7 +384,7 @@ npm install -g @anthropic-ai/claude-code
   Use `uvx` to run the latest version directly from PyPI.
 
   ```shell
-  claude mcp add --transport stdio windows-mcp -- uvx windows-mcp
+  claude mcp add --transport stdio windows-mcp -- uvx windows-mcp serve
   ```
 
   **Option B: Install from Source**
@@ -397,7 +397,7 @@ npm install -g @anthropic-ai/claude-code
 
   2. Run the following command in your terminal:
   ```shell
-  claude mcp add --transport stdio windows-mcp -- uv --directory "<path>" run windows-mcp
+  claude mcp add --transport stdio windows-mcp -- uv --directory "<path>" run windows-mcp serve
   ```
 
   *Note: To make the server available across all projects, add `--scope user` to the command.*
@@ -407,7 +407,7 @@ npm install -g @anthropic-ai/claude-code
   **Note:** On Windows, if you encounter "Connection closed" errors, use the full path to `uvx.exe`:
 
   ```shell
-  claude mcp add --transport stdio windows-mcp -- C:\Users\<user>\.local\bin\uvx.exe windows-mcp
+  claude mcp add --transport stdio windows-mcp -- C:\Users\<user>\.local\bin\uvx.exe windows-mcp serve
   ```
 
   To verify the server is registered, run `claude mcp list`. Inside Claude Code, use `/mcp` to check server status.
@@ -423,7 +423,7 @@ npm install -g @anthropic-ai/claude-code
 
   2. From your **WSL terminal**, register the server:
   ```shell
-  claude mcp add windows-mcp --transport stdio -s user -- powershell.exe -Command "C:\Users\<user>\.local\bin\uvx.exe windows-mcp"
+  claude mcp add windows-mcp --transport stdio -s user -- powershell.exe -Command "C:\Users\<user>\.local\bin\uvx.exe windows-mcp serve"
   ```
 
   Replace `<user>` with your Windows username. The `-s user` flag makes the server available across all projects.
@@ -439,11 +439,11 @@ Windows-MCP runs directly on your Windows machine and exposes its tools to the c
 
 ```shell
 # Runs with stdio transport (default)
-uvx windows-mcp
+uvx windows-mcp serve
 
 # Or with SSE/Streamable HTTP for network access
-uvx windows-mcp --transport sse --host localhost --port 8000
-uvx windows-mcp --transport streamable-http --host localhost --port 8000
+uvx windows-mcp serve --transport sse --host localhost --port 8000
+uvx windows-mcp serve --transport streamable-http --host localhost --port 8000
 ```
 
 Optional environment variables can be set to customize behavior — see [Environment Variables](#-environment-variables) below.
@@ -453,7 +453,7 @@ Optional environment variables can be set to customize behavior — see [Environ
 For network access, enable authentication and TLS:
 
 ```shell
-windows-mcp --transport sse --host 0.0.0.0 \
+windows-mcp serve --transport sse --host 0.0.0.0 \
   --auth-key "your_secret_token" \
   --ip-allowlist "203.0.113.0/24" \
   --ssl-certfile cert.pem --ssl-keyfile key.pem
@@ -463,11 +463,11 @@ See [🔐 Security & Access Control](#-security--access-control) for all options
 
 ### Transport Options
 
-| Transport | Flag | Use Case |
+| Transport | Command | Use Case |
 |---|---|---|
-| `stdio` (default) | `--transport stdio` | Direct connection from MCP clients like Claude Desktop, Cursor, etc. |
-| `sse` | `--transport sse --host HOST --port PORT` | Network-accessible via Server-Sent Events |
-| `streamable-http` | `--transport streamable-http --host HOST --port PORT` | Network-accessible via HTTP streaming (recommended for production) |
+| `stdio` (default) | `serve --transport stdio` | Direct connection from MCP clients like Claude Desktop, Cursor, etc. |
+| `sse` | `serve --transport sse --host HOST --port PORT` | Network-accessible via Server-Sent Events |
+| `streamable-http` | `serve --transport streamable-http --host HOST --port PORT` | Network-accessible via HTTP streaming (recommended for production) |
 
 ---
 
@@ -475,13 +475,13 @@ See [🔐 Security & Access Control](#-security--access-control) for all options
 
 ### Authentication
 ```shell
-windows-mcp --transport sse --host 0.0.0.0 --auth-key "your_token"
+windows-mcp serve --transport sse --host 0.0.0.0 --auth-key "your_token"
 ```
 Requires `Authorization: Bearer your_token` header on all requests.
 
 ### IP Allowlist
 ```shell
-windows-mcp --auth-key "token" --ip-allowlist "203.0.113.0/24,198.51.100.5"
+windows-mcp serve --auth-key "token" --ip-allowlist "203.0.113.0/24,198.51.100.5"
 ```
 Restricts connections to specified CIDR ranges. Blocks private/loopback IPs by default.
 
@@ -492,7 +492,7 @@ By default, **no CORS headers are emitted**. Browsers block cross-origin request
 If you need a browser-based MCP client to reach the server, opt in with an explicit origin allowlist:
 
 ```shell
-windows-mcp --cors-origins "https://my-client.example.com,https://other.example.com"
+windows-mcp serve --cors-origins "https://my-client.example.com,https://other.example.com"
 ```
 
 Only the listed origins receive `Access-Control-Allow-Origin` headers; all other cross-origin requests are rejected by the browser. The equivalent environment variable is `WINDOWS_MCP_CORS_ORIGINS`.
@@ -501,15 +501,15 @@ Only the listed origins receive `Access-Control-Allow-Origin` headers; all other
 All tools are enabled by default. Use `--tools` to whitelist specific tools, or `--exclude-tools` to block specific ones.
 
 ```shell
-windows-mcp --tools "Screenshot,Click,Snapshot"   # Enable only these tools
-windows-mcp --exclude-tools "PowerShell,Registry" # Disable specific tools
+windows-mcp serve --tools "Screenshot,Click,Snapshot"   # Enable only these tools
+windows-mcp serve --exclude-tools "PowerShell,Registry" # Disable specific tools
 ```
 
 ### TLS/HTTPS
 ```shell
 openssl req -x509 -newkey rsa:4096 -keyout key.pem -out cert.pem -days 365 -nodes
 
-windows-mcp --ssl-certfile cert.pem --ssl-keyfile key.pem
+windows-mcp serve --ssl-certfile cert.pem --ssl-keyfile key.pem
 ```
 
 ### OAuth 2.0 + PKCE
@@ -517,7 +517,7 @@ windows-mcp --ssl-certfile cert.pem --ssl-keyfile key.pem
 For MCP clients that use OAuth (e.g. Claude Desktop) instead of a static API key:
 
 ```shell
-windows-mcp --transport streamable-http --host 0.0.0.0 \
+windows-mcp serve --transport streamable-http --host 0.0.0.0 \
   --ssl-certfile ~/.windows-mcp/cert.pem \
   --ssl-keyfile  ~/.windows-mcp/key.pem \
   --oauth-client-id my-client \
@@ -664,7 +664,7 @@ Local (no security):
   "mcpServers": {
     "windows-mcp": {
       "command": "uvx",
-      "args": ["windows-mcp"],
+      "args": ["windows-mcp", "serve"],
       "env": { "WINDOWS_MCP_SCREENSHOT_SCALE": "0.5" }
     }
   }
@@ -677,7 +677,7 @@ Remote (with auth + IP allowlist + TLS):
   "mcpServers": {
     "windows-mcp": {
       "command": "uvx",
-      "args": ["windows-mcp", "--transport", "sse", "--host", "0.0.0.0"],
+      "args": ["windows-mcp", "serve", "--transport", "sse", "--host", "0.0.0.0"],
       "env": {
         "WINDOWS_MCP_AUTH_KEY": "your_token",
         "WINDOWS_MCP_IP_ALLOWLIST": "203.0.113.0/24",
