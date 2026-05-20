@@ -1,4 +1,4 @@
-""" PowerShell command executor servivce """
+""" PowerShell command executor service """
 
 import base64
 import ctypes
