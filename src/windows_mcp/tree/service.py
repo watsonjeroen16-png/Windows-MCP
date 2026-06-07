@@ -288,15 +288,15 @@ class Tree:
                             metadata['help_text']=help_text.encode('ascii', 'ignore').decode('ascii')
                     except Exception:
                         pass
-
-                dom_interactive_nodes.append(TreeElementNode(**{
-                    'name':child.Name.strip(),
-                    'control_type':node.CachedLocalizedControlType,
-                    'bounding_box':bounding_box,
-                    'center':center,
-                    'window_name':window_name,
-                    'metadata':metadata
-                }))
+                if child.Name.strip():
+                    dom_interactive_nodes.append(TreeElementNode(**{
+                        'name':child.Name.strip(),
+                        'control_type':node.CachedLocalizedControlType,
+                        'bounding_box':bounding_box,
+                        'center':center,
+                        'window_name':window_name,
+                        'metadata':metadata
+                    }))
         elif self.element_has_child_element(node,'link','heading'):
             dom_interactive_nodes.pop()
             # child from GetFirstChildControl() is NOT cached — use live access
@@ -309,14 +309,18 @@ class Tree:
             is_focused=node.HasKeyboardFocus
             metadata:dict[str,Any]={}
             metadata['has_focused']=is_focused
-            dom_interactive_nodes.append(TreeElementNode(**{
-                'name':node.Name.strip(),
-                'control_type':control_type,
-                'bounding_box':bounding_box,
-                'center':center,
-                'window_name':window_name,
-                'metadata':metadata
-            }))
+            if node.Name.strip():
+                dom_interactive_nodes.append(TreeElementNode(**{
+                    'name':node.Name.strip(),
+                    'control_type':control_type,
+                    'bounding_box':bounding_box,
+                    'center':center,
+                    'window_name':window_name,
+                    'metadata':metadata
+                }))
+        else:
+            if not node.Name.strip():
+                dom_interactive_nodes.pop()
 
 
     def tree_traversal(self, node: Control, window_bounding_box:Rect, window_name:str, is_browser:bool,
@@ -577,15 +581,16 @@ class Tree:
                             else:
                                 bounding_box=self.iou_bounding_box(window_bounding_box,element_bounding_box)
                                 center = bounding_box.get_center()
-                                tree_node=TreeElementNode(**{
-                                    'name':name,
-                                    'control_type':localized_control_type.title(),
-                                    'bounding_box':bounding_box,
-                                    'center':center,
-                                    'window_name':window_name,
-                                    'metadata':metadata
-                                })
-                                interactive_nodes.append(tree_node)
+                                if name:
+                                    tree_node=TreeElementNode(**{
+                                        'name':name,
+                                        'control_type':localized_control_type.title(),
+                                        'bounding_box':bounding_box,
+                                        'center':center,
+                                        'window_name':window_name,
+                                        'metadata':metadata
+                                    })
+                                    interactive_nodes.append(tree_node)
                                 if current_semantic_node is not None:
                                     current_semantic_node.add_child(SemanticNode(
                                         control_type=tree_node.control_type,
