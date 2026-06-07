@@ -61,8 +61,7 @@ def _scroll_meta_str(metadata: dict[str, Any]) -> str:
 def _render_tree(nodes: list, meta_fn) -> str:
     windows: dict[str, list] = {}
     for node in nodes:
-        if node.name and node.name.strip():
-            windows.setdefault(node.window_name, []).append(node)
+        windows.setdefault(node.window_name, []).append(node)
 
     lines = []
     for window_name, window_nodes in windows.items():
