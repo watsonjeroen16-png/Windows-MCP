@@ -78,4 +78,4 @@ def register(mcp, *, get_desktop, get_analytics):
                 case _:
                     return f'Error: Unknown mode "{mode}". Use: read, write, copy, move, delete, list, search, info.'
         except Exception as e:
-            return f'Error in File tool: {str(e)}'
+            raise

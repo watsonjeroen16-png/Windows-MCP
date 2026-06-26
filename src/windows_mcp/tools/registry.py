@@ -48,4 +48,4 @@ def register(mcp, *, get_desktop, get_analytics):
             else:
                 return 'Error: mode must be "get", "set", "delete", or "list".'
         except Exception as e:
-            return f'Error accessing registry: {str(e)}'
+            raise

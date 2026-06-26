@@ -49,4 +49,4 @@ def register(mcp, *, get_desktop, get_analytics):
             else:
                 return 'Error: mode must be either "get" or "set".'
         except Exception as e:
-            return f"Error managing clipboard: {str(e)}"
+            raise
