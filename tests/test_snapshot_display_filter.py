@@ -358,6 +358,35 @@ class TestDisplayFiltering:
         assert annotated.size == (1920, 1080)
         assert annotated.getpixel((80, 100)) != (255, 255, 255)
 
+    def test_annotation_keeps_full_desktop_screenshot_size(self, desktop):
+        screenshot = Image.new("RGB", (3840, 1080), "white")
+        with patch.object(desktop, "get_screenshot", return_value=screenshot):
+            with patch("windows_mcp.desktop.service.uia.GetVirtualScreenRect") as mock_virtual_rect:
+                mock_virtual_rect.return_value = (0, 0, 3840, 1080)
+                annotated = desktop.get_annotated_screenshot(nodes=[])
+
+        assert annotated.size == (3840, 1080)
+
+    def test_annotation_clamps_edge_label_inside_screenshot(self, desktop):
+        screenshot = Image.new("RGB", (40, 30), "white")
+        node = TreeElementNode(
+            name="Top Edge Button",
+            control_type="Button",
+            window_name="App",
+            bounding_box=make_box(30, 0, 39, 5),
+            center=Center(x=34, y=2),
+            metadata={},
+        )
+
+        with patch.object(desktop, "get_screenshot", return_value=screenshot):
+            with patch("windows_mcp.desktop.service.uia.GetVirtualScreenRect") as mock_virtual_rect:
+                with patch("windows_mcp.desktop.service.random.randint", return_value=0):
+                    mock_virtual_rect.return_value = (0, 0, 40, 30)
+                    annotated = desktop.get_annotated_screenshot(nodes=[node])
+
+        assert annotated.size == (40, 30)
+        assert annotated.getpixel((30, 7)) != (255, 255, 255)
+
     def test_desktop_state_tracks_selected_displays(self):
         state = DesktopState(
             active_desktop={"name": "Desktop 1"},
