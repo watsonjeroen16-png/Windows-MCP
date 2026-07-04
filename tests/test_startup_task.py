@@ -6,23 +6,10 @@ from windows_mcp.__main__ import main
 import windows_mcp.__main__ as cli
 
 
-def test_resolve_program_prefers_installed_script(monkeypatch):
-    monkeypatch.setattr(cli.shutil, "which", lambda name: "C:\\Tools\\windows-mcp.exe" if name == "windows-mcp" else None)
+def test_resolve_program_uses_running_interpreter(monkeypatch):
+    monkeypatch.setattr(cli.sys, "executable", "C:\\Tools\\python.exe")
 
-    assert cli._resolve_program() == ["C:\\Tools\\windows-mcp.exe"]
-
-
-def test_resolve_program_falls_back_to_uvx_for_ephemeral_uv_cache(monkeypatch):
-    def fake_which(name: str):
-        if name == "windows-mcp":
-            return "C:\\Users\\me\\.cache\\uv\\archive\\bin\\windows-mcp.exe"
-        if name == "uvx":
-            return "C:\\Tools\\uvx.exe"
-        return None
-
-    monkeypatch.setattr(cli.shutil, "which", fake_which)
-
-    assert cli._resolve_program() == ["C:\\Tools\\uvx.exe", "windows-mcp"]
+    assert cli._resolve_program() == ["C:\\Tools\\python.exe", "-m", "windows_mcp"]
 
 
 def test_install_writes_start_script_and_creates_task(monkeypatch, tmp_path):
@@ -33,6 +20,7 @@ def test_install_writes_start_script_and_creates_task(monkeypatch, tmp_path):
     monkeypatch.setattr(cli, "_resolve_program", lambda: ["C:\\Tools\\windows-mcp.exe"])
 
     calls = []
+    registrations = []
 
     def fake_schtasks(*args: str):
         calls.append(args)
@@ -41,6 +29,12 @@ def test_install_writes_start_script_and_creates_task(monkeypatch, tmp_path):
         return Mock(returncode=0, stdout="", stderr="")
 
     monkeypatch.setattr(cli, "_schtasks", fake_schtasks)
+    monkeypatch.setattr(
+        cli,
+        "_register_task_powershell",
+        lambda task_name, script_path: registrations.append((task_name, script_path))
+        or Mock(returncode=0, stdout="", stderr=""),
+    )
 
     result = runner.invoke(main, ["install", "--transport", "sse", "--host", "127.0.0.1", "--port", "9000"])
 
@@ -49,16 +43,7 @@ def test_install_writes_start_script_and_creates_task(monkeypatch, tmp_path):
     assert "windows-mcp.exe serve --transport sse --host 127.0.0.1 --port 9000" in script
     assert '1>>"' in script
     assert '2>>"' in script
-    assert (
-        "/Create",
-        "/SC",
-        "ONLOGON",
-        "/TN",
-        cli._TASK_NAME,
-        "/TR",
-        f'"{start_script}"',
-        "/F",
-    ) in calls
+    assert registrations == [(cli._TASK_NAME, str(start_script))]
     assert ("/Run", "/TN", cli._TASK_NAME) in calls
 
 

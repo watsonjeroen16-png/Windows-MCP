@@ -67,10 +67,13 @@ class TestTreeState:
         ts = TreeState(interactive_nodes=[sample_tree_element_node])
         result = ts.interactive_elements_to_string()
         lines = result.split("\n")
-        assert lines[0] == "# id|window|control_type|name|coords|metadata"
-        assert lines[1] == '0|Notepad|Button|OK|(200,100)|{"value": "", "shortcut": "Alt+O", "has_focused": true}'
+        assert lines[0] == 'window "Notepad"'
+        assert '(200,100) button "OK"' in lines[1]
+        assert "[action: click]" in lines[1]
+        assert "[focused]" in lines[1]
+        assert "[shortcut:Alt+O]" in lines[1]
 
-    def test_interactive_elements_indices(self, sample_tree_element_node):
+    def test_interactive_elements_preserve_order(self, sample_tree_element_node):
         node2 = TreeElementNode(
             bounding_box=sample_tree_element_node.bounding_box,
             center=sample_tree_element_node.center,
@@ -81,8 +84,8 @@ class TestTreeState:
         ts = TreeState(interactive_nodes=[sample_tree_element_node, node2])
         result = ts.interactive_elements_to_string()
         lines = result.split("\n")
-        assert lines[1].startswith("0|")
-        assert lines[2].startswith("1|")
+        assert 'button "OK"' in lines[1]
+        assert 'button "Cancel"' in lines[2]
 
     def test_scrollable_elements_to_string_empty(self):
         ts = TreeState()
@@ -97,14 +100,12 @@ class TestTreeState:
         )
         result = ts.scrollable_elements_to_string()
         lines = result.split("\n")
-        assert (
-            lines[0] == "# id|window|control_type|name|coords|metadata"
-        )
-        # base_index = len(interactive_nodes) = 1
-        assert lines[1].startswith("1|")
-        assert '"vertical_scroll_percent": 42.5' in lines[1]
+        assert lines[0] == 'window "Notepad"'
+        assert '(200,100) pane "Document"' in lines[1]
+        assert "[action: click]" in lines[1]
+        assert "[v:42.5%]" in lines[1]
 
-    def test_scrollable_elements_base_index_offset(self, sample_scroll_element_node):
+    def test_scrollable_elements_are_independent_from_interactive_count(self, sample_scroll_element_node):
         bb = BoundingBox(left=0, top=0, right=10, bottom=10, width=10, height=10)
         c = Center(x=5, y=5)
         interactive = [TreeElementNode(bounding_box=bb, center=c, name=f"btn{i}") for i in range(3)]
@@ -114,15 +115,11 @@ class TestTreeState:
         )
         result = ts.scrollable_elements_to_string()
         lines = result.split("\n")
-        # base_index = 3 (three interactive nodes)
-        assert lines[1].startswith("3|")
+        assert lines[0] == 'window "Notepad"'
+        assert 'pane "Document"' in lines[1]
 
 
 class TestTreeElementNode:
-    def test_to_row(self, sample_tree_element_node):
-        row = sample_tree_element_node.to_row(0)
-        assert row == [0, "Notepad", "Button", "OK", "(200,100)"]
-
     def test_update_from_node(self, sample_tree_element_node):
         target = TreeElementNode(
             bounding_box=BoundingBox(left=0, top=0, right=0, bottom=0, width=0, height=0),
@@ -137,16 +134,3 @@ class TestTreeElementNode:
         assert target.metadata["has_focused"] is True
         assert target.bounding_box is sample_tree_element_node.bounding_box
         assert target.center is sample_tree_element_node.center
-
-
-class TestScrollElementNode:
-    def test_to_row_with_base_index(self, sample_scroll_element_node):
-        row = sample_scroll_element_node.to_row(index=0, base_index=5)
-        assert row[0] == 5  # base_index + index
-        assert row[1] == "Notepad"
-        assert row[2] == "Pane"
-        assert row[3] == "Document"
-        assert row[4] == "(200,100)"
-        import json
-        metadata = json.loads(row[5])
-        assert metadata["vertical_scroll_percent"] == 42.5
