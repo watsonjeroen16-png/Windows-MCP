@@ -39,4 +39,4 @@ def register(mcp, *, get_desktop, get_analytics):
             else:
                 return 'Error: mode must be either "list" or "kill".'
         except Exception as e:
-            return f"Error managing processes: {str(e)}"
+            raise
