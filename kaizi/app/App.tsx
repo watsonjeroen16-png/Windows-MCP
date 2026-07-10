@@ -8,13 +8,15 @@
  * OnboardingContext reducer already *is* the navigation state machine
  * (step + smsStage + direction), and back/continue are reducer actions.
  */
-import {
-  CormorantGaramond_300Light,
-  CormorantGaramond_300Light_Italic,
-  CormorantGaramond_400Regular,
-  CormorantGaramond_400Regular_Italic,
-} from "@expo-google-fonts/cormorant-garamond";
-import { Inter_300Light, Inter_400Regular, Inter_500Medium } from "@expo-google-fonts/inter";
+// Per-weight subpath imports: the package root index re-exports every weight,
+// which makes Metro bundle ~10MB of unused TTFs. Subpaths keep it to the 7 in use.
+import { CormorantGaramond_300Light } from "@expo-google-fonts/cormorant-garamond/300Light";
+import { CormorantGaramond_300Light_Italic } from "@expo-google-fonts/cormorant-garamond/300Light_Italic";
+import { CormorantGaramond_400Regular } from "@expo-google-fonts/cormorant-garamond/400Regular";
+import { CormorantGaramond_400Regular_Italic } from "@expo-google-fonts/cormorant-garamond/400Regular_Italic";
+import { Inter_300Light } from "@expo-google-fonts/inter/300Light";
+import { Inter_400Regular } from "@expo-google-fonts/inter/400Regular";
+import { Inter_500Medium } from "@expo-google-fonts/inter/500Medium";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
