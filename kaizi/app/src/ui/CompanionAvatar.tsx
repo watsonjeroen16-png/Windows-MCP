@@ -392,7 +392,7 @@ export function CompanionAvatar({ species, size = 120, animated = true }: Compan
       {art.overlay ? (
         <Animated.View
           style={[
-            StyleSheet.absoluteFillObject,
+            StyleSheet.absoluteFill,
             { transformOrigin: art.overlay.motion.origin },
             overlayStyle,
           ]}
@@ -404,7 +404,7 @@ export function CompanionAvatar({ species, size = 120, animated = true }: Compan
       ) : null}
       <Animated.View
         style={[
-          StyleSheet.absoluteFillObject,
+          StyleSheet.absoluteFill,
           art.baseMotion ? { transformOrigin: art.baseMotion.origin } : null,
           baseStyle,
         ]}
@@ -414,7 +414,7 @@ export function CompanionAvatar({ species, size = 120, animated = true }: Compan
         </Svg>
       </Animated.View>
       {art.embers && animated ? (
-        <View pointerEvents="none" style={StyleSheet.absoluteFillObject}>
+        <View pointerEvents="none" style={StyleSheet.absoluteFill}>
           <Ember left={30} delay={0} />
           <Ember left={66} delay={2200} />
         </View>

@@ -165,8 +165,14 @@ const styles = StyleSheet.create({
   fill: { flex: 1 },
 });
 
-/** Convenience: absolute-fill style reused by scenery layers. */
-export const absoluteFill = StyleSheet.absoluteFillObject;
+/** Convenience: absolute-fill style object (RN 0.86 dropped absoluteFillObject). */
+export const absoluteFillObject = {
+  position: "absolute",
+  top: 0,
+  left: 0,
+  right: 0,
+  bottom: 0,
+} as const satisfies ViewStyle;
 
 /** Plain positioned dot — building block for glow/particle accents. */
 export function Dot({ size, color, style }: { size: number; color: string; style?: ViewStyle }) {

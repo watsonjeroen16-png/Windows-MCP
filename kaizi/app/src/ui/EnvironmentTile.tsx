@@ -300,7 +300,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   innerRing: {
-    ...StyleSheet.absoluteFillObject,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     margin: 2,
     borderRadius: radius.lg - 3,
     borderWidth: StyleSheet.hairlineWidth,

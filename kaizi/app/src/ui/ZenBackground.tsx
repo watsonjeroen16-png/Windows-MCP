@@ -206,7 +206,7 @@ export function ZenBackground({ variant, skyTint }: ZenBackgroundProps) {
   return (
     <View
       pointerEvents="none"
-      style={[StyleSheet.absoluteFillObject, { backgroundColor: VARIANT_GROUND[variant] }]}
+      style={[StyleSheet.absoluteFill, { backgroundColor: VARIANT_GROUND[variant] }]}
     >
       {skyTint !== undefined ? (
         <View style={[styles.skyBand, { backgroundColor: skyTint, opacity: 0.5 }]} />
