@@ -21,17 +21,12 @@ export interface VerifyCheckRequest {
 }
 
 export interface OnboardingProfileRequest {
-  phone: string;
   goals: GoalId[];
   identityWhy: string;
   companion: CompanionId;
   personality: PersonalityId;
   environment: EnvironmentId;
   smsPrefs: SmsPrefs;
-}
-
-export interface WelcomeSmsRequest {
-  phone: string;
 }
 
 export interface ApiResult {
@@ -43,11 +38,21 @@ export interface ApiResult {
 export interface VerifyCheckResult extends ApiResult {
   /** ok=true and verified=false means the server rejected the code. */
   verified: boolean;
+  /**
+   * Bearer session token bound to the verified phone (server:
+   * kaizi/server/README.md). Present only when verified=true and offline is
+   * false. Required as `Authorization: Bearer <token>` on submitProfile and
+   * sendWelcomeSms — the server derives identity from this token, not from
+   * any phone field in those requests.
+   */
+  token: string | null;
 }
 
 const BASE_URL: string | undefined = process.env.EXPO_PUBLIC_API_URL;
 const MOCK_ACCEPTED_CODE = "000000";
 const MOCK_LATENCY_MS = 450;
+/** Stand-in token for the offline mock path — never sent to any server. */
+const MOCK_OFFLINE_TOKEN = "offline-mock-token";
 
 let warnedOffline = false;
 
@@ -62,15 +67,21 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function post<TBody extends object>(path: string, body: TBody): Promise<Response | null> {
+async function post<TBody extends object>(
+  path: string,
+  body: TBody,
+  token?: string | null
+): Promise<Response | null> {
   if (!BASE_URL) {
     warnOffline("EXPO_PUBLIC_API_URL is not set");
     return null;
   }
   try {
+    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    if (token) headers.Authorization = `Bearer ${token}`;
     return await fetch(`${BASE_URL}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(body),
     });
   } catch (err) {
@@ -92,30 +103,49 @@ export async function verifyStart(request: VerifyStartRequest): Promise<ApiResul
 /**
  * POST /api/verify/check — check the 6-digit code the user entered.
  * Server contract (kaizi/server/README.md): success is
- * `{"status":"approved","verified":true}`; a wrong code is
- * `400 {"error":"invalid_code"}` — a *handled* outcome, not a failure.
+ * `{"status":"approved","verified":true,"token":"...","expiresAt":"..."}`;
+ * a wrong code is `400 {"error":"invalid_code"}` — a *handled* outcome, not
+ * a failure. The returned `token` must be passed to submitProfile and
+ * sendWelcomeSms — the server no longer accepts a bare phone number for
+ * those two endpoints (see docs/security-review.md H-2).
  */
 export async function verifyCheck(request: VerifyCheckRequest): Promise<VerifyCheckResult> {
   const response = await post("/api/verify/check", request);
   if (response === null) {
     await delay(MOCK_LATENCY_MS);
-    return { ok: true, offline: true, verified: request.code === MOCK_ACCEPTED_CODE };
+    const verified = request.code === MOCK_ACCEPTED_CODE;
+    return { ok: true, offline: true, verified, token: verified ? MOCK_OFFLINE_TOKEN : null };
   }
   try {
-    const data = (await response.json()) as { verified?: boolean; error?: string };
-    if (response.ok) return { ok: true, offline: false, verified: data.verified === true };
-    if (response.status === 400 && data.error === "invalid_code") {
-      return { ok: true, offline: false, verified: false };
+    const data = (await response.json()) as { verified?: boolean; error?: string; token?: string };
+    if (response.ok) {
+      return {
+        ok: true,
+        offline: false,
+        verified: data.verified === true,
+        token: data.verified === true && typeof data.token === "string" ? data.token : null,
+      };
     }
-    return { ok: false, offline: false, verified: false };
+    if (response.status === 400 && data.error === "invalid_code") {
+      return { ok: true, offline: false, verified: false, token: null };
+    }
+    return { ok: false, offline: false, verified: false, token: null };
   } catch {
-    return { ok: false, offline: false, verified: false };
+    return { ok: false, offline: false, verified: false, token: null };
   }
 }
 
-/** POST /api/onboarding/profile — commit the completed onboarding profile. */
-export async function submitProfile(request: OnboardingProfileRequest): Promise<ApiResult> {
-  const response = await post("/api/onboarding/profile", request);
+/**
+ * POST /api/onboarding/profile — commit the completed onboarding profile.
+ * `token` is the session token from a successful verifyCheck; sent as
+ * `Authorization: Bearer <token>` (H-2). The server derives the phone from
+ * it, so no phone is sent in the body.
+ */
+export async function submitProfile(
+  request: OnboardingProfileRequest,
+  token: string
+): Promise<ApiResult> {
+  const response = await post("/api/onboarding/profile", request, token);
   if (response === null) {
     await delay(MOCK_LATENCY_MS);
     return { ok: true, offline: true };
@@ -124,12 +154,14 @@ export async function submitProfile(request: OnboardingProfileRequest): Promise<
 }
 
 /**
- * POST /api/sms/welcome — enqueue the companion's first SMS.
- * A repeat call returns `409 already_welcomed` (kaizi/server/README.md);
- * that is benign here (e.g. handoff screen re-mounts), so treat it as ok.
+ * POST /api/sms/welcome — enqueue the companion's first SMS. `token` is the
+ * session token from verifyCheck, sent as `Authorization: Bearer <token>`
+ * (H-2). A repeat call returns `409 already_welcomed`
+ * (kaizi/server/README.md); that is benign here (e.g. handoff screen
+ * re-mounts), so treat it as ok.
  */
-export async function sendWelcomeSms(request: WelcomeSmsRequest): Promise<ApiResult> {
-  const response = await post("/api/sms/welcome", request);
+export async function sendWelcomeSms(token: string): Promise<ApiResult> {
+  const response = await post("/api/sms/welcome", {}, token);
   if (response === null) {
     await delay(MOCK_LATENCY_MS);
     return { ok: true, offline: true };

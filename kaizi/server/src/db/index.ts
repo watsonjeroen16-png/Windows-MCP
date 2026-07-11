@@ -96,8 +96,15 @@ export function createPgDb(databaseUrl: string): Db {
       return { user, profile: profiles[0] ?? null, smsPrefs: prefs[0] ?? null };
     },
 
-    async markWelcomed(userId: string): Promise<void> {
-      await pool.query("UPDATE users SET welcomed_at = now() WHERE id = $1", [userId]);
+    async markWelcomed(userId: string): Promise<boolean> {
+      // Only transitions when still unset — the WHERE clause plus RETURNING
+      // makes "check unwelcomed, then claim it" a single atomic statement,
+      // so concurrent requests can't both win.
+      const { rowCount } = await pool.query(
+        "UPDATE users SET welcomed_at = now() WHERE id = $1 AND welcomed_at IS NULL",
+        [userId]
+      );
+      return (rowCount ?? 0) > 0;
     },
 
     async close(): Promise<void> {

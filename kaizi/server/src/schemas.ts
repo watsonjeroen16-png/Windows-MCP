@@ -50,8 +50,12 @@ export const verifyCheckSchema = z.object({
   code: z.string().trim().regex(/^\d{4,8}$/, "code must be 4-8 digits"),
 });
 
+// Note: profile/welcome no longer take `phone` in the body — the caller's
+// identity is derived from their bearer session token (see
+// middleware/auth.ts, services/session-token.ts). A `phone` field sent by
+// an older client is simply stripped by Zod's default "unknown keys are
+// dropped" behavior; it is never trusted. See docs/security-review.md H-2.
 export const profileSchema = z.object({
-  phone: phoneSchema,
   goals: z
     .array(z.enum(GOALS))
     .min(1, "select at least one goal")
@@ -70,8 +74,9 @@ export const profileSchema = z.object({
   }),
 });
 
-export const welcomeSchema = z.object({
-  phone: phoneSchema,
-});
+// Body is unused (phone comes from the bearer token) but kept as an object
+// schema — accepts either an empty body or a stray `phone` (ignored) so
+// older/offline-mock clients that still send one don't get a 400.
+export const welcomeSchema = z.object({});
 
 export type ProfileInput = z.infer<typeof profileSchema>;

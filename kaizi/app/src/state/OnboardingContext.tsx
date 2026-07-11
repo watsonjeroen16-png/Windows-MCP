@@ -36,6 +36,13 @@ export interface OnboardingState {
   environment: EnvironmentId | null;
   phone: string | null; // E.164, e.g. "+31612345678"
   phoneVerified: boolean;
+  /**
+   * Bearer session token issued by verify/check on success (server:
+   * kaizi/server/README.md). Required by submitProfile/sendWelcomeSms —
+   * the server derives the phone from this token, not from any phone field
+   * in those requests (docs/security-review.md H-2). Null until verified.
+   */
+  sessionToken: string | null;
   smsPrefs: SmsPrefs; // both default true
   step: Step; // resume point
   smsStage: SmsStage;
@@ -51,6 +58,7 @@ export const initialOnboardingState: OnboardingState = {
   environment: null,
   phone: null,
   phoneVerified: false,
+  sessionToken: null,
   smsPrefs: { morning: true, evening: true },
   step: 1,
   smsStage: "phone",
@@ -64,7 +72,7 @@ export type OnboardingAction =
   | { kind: "select_personality"; personality: PersonalityId }
   | { kind: "select_environment"; environment: EnvironmentId }
   | { kind: "set_phone"; phone: string }
-  | { kind: "set_phone_verified" }
+  | { kind: "set_phone_verified"; token: string }
   | { kind: "set_sms_pref"; pref: keyof SmsPrefs; value: boolean }
   | { kind: "next" }
   | { kind: "back" };
@@ -92,9 +100,9 @@ export function onboardingReducer(
     case "select_environment":
       return { ...state, environment: action.environment };
     case "set_phone":
-      return { ...state, phone: action.phone, phoneVerified: false };
+      return { ...state, phone: action.phone, phoneVerified: false, sessionToken: null };
     case "set_phone_verified":
-      return { ...state, phoneVerified: true };
+      return { ...state, phoneVerified: true, sessionToken: action.token };
     case "set_sms_pref":
       return { ...state, smsPrefs: { ...state.smsPrefs, [action.pref]: action.value } };
     case "next": {

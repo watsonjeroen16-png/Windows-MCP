@@ -99,13 +99,15 @@ export function createMemoryDb(): MemoryDb {
       };
     },
 
-    async markWelcomed(userId: string): Promise<void> {
+    async markWelcomed(userId: string): Promise<boolean> {
       for (const user of users.values()) {
         if (user.id === userId) {
+          if (user.welcomed_at) return false; // already claimed
           user.welcomed_at = new Date();
-          return;
+          return true;
         }
       }
+      return false;
     },
 
     async close(): Promise<void> {

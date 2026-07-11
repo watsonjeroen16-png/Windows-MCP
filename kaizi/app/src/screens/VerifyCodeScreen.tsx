@@ -59,8 +59,8 @@ export function VerifyCodeScreen() {
     setMessage(null);
     const result = await verifyCheck({ phone, code });
     setVerifying(false);
-    if (result.ok && result.verified) {
-      dispatch({ kind: "set_phone_verified" });
+    if (result.ok && result.verified && result.token) {
+      dispatch({ kind: "set_phone_verified", token: result.token });
       dispatch({ kind: "next" });
       return;
     }

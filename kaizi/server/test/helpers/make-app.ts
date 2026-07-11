@@ -5,6 +5,7 @@
 import type { Express } from "express";
 
 import { createApp, type CreateAppOptions } from "../../src/app.js";
+import { createSessionTokenService, type SessionTokenService } from "../../src/services/session-token.js";
 import { createMockSmsService } from "../../src/services/twilio.js";
 import { createMemoryDb, type MemoryDb } from "./memory-db.js";
 
@@ -12,25 +13,37 @@ export interface TestApp {
   app: Express;
   db: MemoryDb;
   smsLog: string[];
+  sessionTokens: SessionTokenService;
 }
+
+const TEST_SESSION_SECRET = "test-session-secret-not-for-production";
 
 export function makeTestApp(overrides: Partial<CreateAppOptions> = {}): TestApp {
   const db = createMemoryDb();
   const smsLog: string[] = [];
   const sms = createMockSmsService((msg) => smsLog.push(msg));
+  const sessionTokens = createSessionTokenService(TEST_SESSION_SECRET);
 
   const app = createApp({
     db,
     sms,
+    sessionTokens,
     logging: false,
     // Generous defaults so ordinary tests never trip limits; the rate-limit
     // test overrides these explicitly.
     verifyRateLimit: { max: 1000, windowMs: 60_000 },
     verifyPhoneRateLimit: { max: 1000, windowMs: 60_000 },
+    verifyPhoneDailyRateLimit: { max: 1000, windowMs: 24 * 60 * 60 * 1000 },
+    globalSendLimit: { max: 1000, windowMs: 60 * 60 * 1000 },
     ...overrides,
   });
 
-  return { app, db, smsLog };
+  return { app, db, smsLog, sessionTokens };
+}
+
+/** Build an `Authorization: Bearer <token>` header value for `phone` directly, bypassing verify/check. */
+export function authHeaderFor(sessionTokens: SessionTokenService, phone: string): string {
+  return `Bearer ${sessionTokens.issue(phone).token}`;
 }
 
 export const VALID_PROFILE_BODY = {

@@ -60,6 +60,14 @@ export interface Db {
   upsertSmsPreferences(userId: string, prefs: { morning: boolean; evening: boolean }): Promise<void>;
   insertMemoryEntry(userId: string, kind: string, content: string): Promise<void>;
   getUserWithProfile(phone: string): Promise<UserWithProfile | null>;
-  markWelcomed(userId: string): Promise<void>;
+  /**
+   * Atomically transitions welcomed_at from unset to now(), only if it was
+   * still unset. Returns true if this call won the transition (the caller
+   * should proceed to send), false if another call already claimed it (the
+   * caller must not send again) — closes a TOCTOU race where two concurrent
+   * /api/sms/welcome requests could both pass the "not yet welcomed" check
+   * and both trigger a real Twilio send.
+   */
+  markWelcomed(userId: string): Promise<boolean>;
   close(): Promise<void>;
 }

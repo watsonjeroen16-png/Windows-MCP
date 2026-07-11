@@ -38,40 +38,49 @@ describe("e2e onboarding flow (mock mode)", () => {
   it("walks start -> check -> profile -> welcome and renders the correct SMS", async () => {
     const ctx = makeTestApp();
 
-    // Guard: profile must be rejected before verification.
+    // Guard: profile must be rejected before verification — no token exists yet.
     const early = await request(ctx.app).post("/api/onboarding/profile").send(PROFILE);
-    expect(early.status).toBe(404);
-    expect(early.body.error).toBe("phone_not_found");
+    expect(early.status).toBe(401);
+    expect(early.body.error).toBe("unauthorized");
 
     // 1. Send the code (screen 7a).
     const start = await request(ctx.app).post("/api/verify/start").send({ phone: PHONE });
     expect(start.status).toBe(200);
 
-    // 1b. A wrong code is rejected and does NOT create a verified user.
+    // 1b. A wrong code is rejected and does NOT create a verified user or a token.
     const wrong = await request(ctx.app)
       .post("/api/verify/check")
       .send({ phone: PHONE, code: "123456" });
     expect(wrong.status).toBe(400);
     expect(wrong.body.error).toBe("invalid_code");
-    const earlyAfterWrong = await request(ctx.app).post("/api/onboarding/profile").send(PROFILE);
-    expect(earlyAfterWrong.status).toBe(404);
+    expect(wrong.body.token).toBeUndefined();
 
-    // 2. Check the mock-accepted code (screen 7b).
+    // 2. Check the mock-accepted code (screen 7b) — this is the only step
+    // that yields a session token; profile/welcome require it as a bearer
+    // credential from here on (H-2).
     const check = await request(ctx.app)
       .post("/api/verify/check")
       .send({ phone: PHONE, code: "000000" });
     expect(check.status).toBe(200);
     expect(check.body.status).toBe("approved");
     expect(check.body.verified).toBe(true);
+    expect(typeof check.body.token).toBe("string");
+    const auth = `Bearer ${check.body.token}`;
 
     // 3. Commit the profile (handoff screen, 7c).
-    const profile = await request(ctx.app).post("/api/onboarding/profile").send(PROFILE);
+    const profile = await request(ctx.app)
+      .post("/api/onboarding/profile")
+      .set("Authorization", auth)
+      .send(PROFILE);
     expect(profile.status).toBe(201);
     expect(profile.body.ok).toBe(true);
     expect(profile.body.created).toBe(true);
 
     // 4. Enqueue the first companion SMS.
-    const welcome = await request(ctx.app).post("/api/sms/welcome").send({ phone: PHONE });
+    const welcome = await request(ctx.app)
+      .post("/api/sms/welcome")
+      .set("Authorization", auth)
+      .send({});
     expect(welcome.status).toBe(200);
     expect(welcome.body.status).toBe("queued");
     expect(welcome.body.mock).toBe(true);
@@ -86,20 +95,50 @@ describe("e2e onboarding flow (mock mode)", () => {
     expect(body).not.toContain("{");
 
     // 5. Repeat welcome is refused (the app treats this 409 as benign).
-    const repeat = await request(ctx.app).post("/api/sms/welcome").send({ phone: PHONE });
+    const repeat = await request(ctx.app)
+      .post("/api/sms/welcome")
+      .set("Authorization", auth)
+      .send({});
     expect(repeat.status).toBe(409);
     expect(repeat.body.error).toBe("already_welcomed");
+
+    // 6. The token keeps working for repeat/idempotent calls within its TTL
+    // (it's still the same verified session) — re-posting the profile with
+    // the same token is allowed and just updates in place.
+    const reProfile = await request(ctx.app)
+      .post("/api/onboarding/profile")
+      .set("Authorization", auth)
+      .send(PROFILE);
+    expect(reProfile.status).toBe(200);
+    expect(reProfile.body.created).toBe(false);
   });
 
-  it("rejects the profile with 409 when the phone exists but is unverified", async () => {
+  it("rejects the profile with 409 when the phone exists but is unverified, even with a validly-signed token", async () => {
     const ctx = makeTestApp();
 
     // Create an unverified user directly (no verified check has succeeded).
     const user = await ctx.db.upsertVerifiedUser(PHONE);
     user.phone_verified_at = null;
 
-    const res = await request(ctx.app).post("/api/onboarding/profile").send(PROFILE);
+    // A token can only be minted by verify/check in this test, so issue one
+    // directly against the test harness's session-token service to exercise
+    // the phone_not_verified branch specifically (simulates a token that
+    // outlived a since-reset verification state).
+    const auth = `Bearer ${ctx.sessionTokens.issue(PHONE).token}`;
+
+    const res = await request(ctx.app)
+      .post("/api/onboarding/profile")
+      .set("Authorization", auth)
+      .send(PROFILE);
     expect(res.status).toBe(409);
     expect(res.body.error).toBe("phone_not_verified");
+  });
+
+  it("rejects profile/welcome outright with no token at all (401, before any DB lookup)", async () => {
+    const ctx = makeTestApp();
+    const profileRes = await request(ctx.app).post("/api/onboarding/profile").send(PROFILE);
+    expect(profileRes.status).toBe(401);
+    const welcomeRes = await request(ctx.app).post("/api/sms/welcome").send({});
+    expect(welcomeRes.status).toBe(401);
   });
 });

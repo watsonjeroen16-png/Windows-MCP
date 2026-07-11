@@ -7,6 +7,7 @@ import "dotenv/config";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { createPgDb } from "./db/index.js";
+import { createSessionTokenService } from "./services/session-token.js";
 import { createMockSmsService, createRealSmsService, MOCK_APPROVAL_CODE } from "./services/twilio.js";
 
 async function main(): Promise<void> {
@@ -30,15 +31,34 @@ async function main(): Promise<void> {
     console.log("[kaizi] Twilio LIVE mode — Verify + Messaging calls will hit Twilio.");
   }
 
+  if (config.sessionSecretGenerated && process.env.NODE_ENV === "production") {
+    // Fail closed: a per-process random secret means tokens don't survive a
+    // restart or a multi-replica deploy, and rotation is invisible. Same
+    // posture as the mock-mode guard above — never silently degrade auth.
+    console.error(
+      "[kaizi] FATAL: SESSION_SECRET is not set but NODE_ENV=production — " +
+        "refusing to start with an auto-generated session-token secret."
+    );
+    process.exit(1);
+  }
+  if (config.sessionSecretGenerated) {
+    console.log(
+      "[kaizi] SESSION_SECRET not set — using a random per-process secret (dev only; " +
+        "tokens invalidate on restart)."
+    );
+  }
+
   const sms = config.mockMode
     ? createMockSmsService()
     : await createRealSmsService(config.twilio!);
 
   const db = createPgDb(config.databaseUrl);
+  const sessionTokens = createSessionTokenService(config.sessionSecret);
 
   const app = createApp({
     db,
     sms,
+    sessionTokens,
     enforceQuietHours: config.enforceQuietHours,
   });
 

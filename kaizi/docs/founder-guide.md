@@ -217,6 +217,9 @@ screen 2 onward. Back is always available (your answers are preserved).
    - **Verify**: enter the 6-digit code.
      - *Mock mode:* no SMS arrives — type **`000000`**.
      - *Real mode:* type the code Twilio texted you.
+     - Behind the scenes, a successful check gets the app a short-lived
+       session token; the app carries it automatically for the next two
+       steps, so there's nothing for you to do here.
    - **Handoff**: the terminal screen. On arrival, your profile is saved to
      Postgres and the companion's first SMS is triggered automatically.
 
@@ -284,7 +287,9 @@ cd kaizi/server
 cp .env.example .env    # skip if you already have one
 ```
 
-Edit `kaizi/server/.env`:
+Edit `kaizi/server/.env`: the four `TWILIO_*` lines ship commented out (that's
+what keeps a fresh copy in mock mode by default). Uncomment all four and
+replace the placeholder values with your real ones:
 
 ```
 TWILIO_ACCOUNT_SID=ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -293,7 +298,7 @@ TWILIO_VERIFY_SERVICE_SID=VAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TWILIO_MESSAGING_FROM=+15551234567
 ```
 
-All **four** must be set — if any one is missing, the server stays in mock
+All **four** must be set (and uncommented) — if any one is missing, the server stays in mock
 mode (that's a safety feature, not a bug). Never commit this file.
 
 ### 6.6 Restart and confirm

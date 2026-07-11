@@ -1,6 +1,7 @@
 import { Router } from "express";
 
 import type { Db } from "../db/types.js";
+import type { AuthedRequest } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
 import { profileSchema, type ProfileInput } from "../schemas.js";
 
@@ -10,13 +11,17 @@ export function createOnboardingRouter({ db }: { db: Db }): Router {
   const router = Router();
 
   // POST /api/onboarding/profile — persist goals, identityWhy, companion,
-  // personality, environment, smsPrefs. Requires a verified phone.
-  // Idempotent-ish: re-posting for the same user updates the profile.
+  // personality, environment, smsPrefs. Requires a verified phone. The phone
+  // is the one bound to the caller's bearer token (see middleware/auth.ts),
+  // never a value from the request body — a body `phone` field, if sent, is
+  // ignored (H-2). Idempotent-ish: re-posting for the same user updates the
+  // profile.
   router.post("/profile", validateBody(profileSchema), async (req, res, next) => {
     try {
       const input = req.body as ProfileInput;
+      const phone = (req as AuthedRequest).authPhone!;
 
-      const user = await db.getUserByPhone(input.phone);
+      const user = await db.getUserByPhone(phone);
       if (!user) {
         res.status(404).json({
           error: "phone_not_found",

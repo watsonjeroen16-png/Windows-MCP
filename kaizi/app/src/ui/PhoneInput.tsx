@@ -33,6 +33,16 @@ interface PhoneInputProps {
   errorMessage?: string | null;
 }
 
+/**
+ * Users habitually type the national trunk prefix ("0612…"), which would
+ * yield a non-dialable E.164 like +3106… — strip leading zeros. Italy is the
+ * known exception (landlines keep the 0), but this field collects mobile
+ * numbers and Italian mobiles never start with 0.
+ */
+export function stripTrunkZero(digits: string, dial: string): string {
+  return dial === "+39" ? digits : digits.replace(/^0+/, "");
+}
+
 /** Light national grouping: +1 gets (XXX) XXX-XXXX, others space-groups. */
 export function formatNational(digits: string, dial: string): string {
   if (dial === "+1") {
@@ -79,12 +89,7 @@ export function PhoneInput({
   }, [query]);
 
   const handleDigits = (raw: string) => {
-    let digits = raw.replace(/\D/g, "");
-    // Users habitually type the national trunk prefix ("0612…"), which would
-    // yield a non-dialable E.164 like +3106… — strip leading zeros. Italy is
-    // the known exception (landlines keep the 0), but this field collects
-    // mobile numbers and Italian mobiles never start with 0.
-    if (country.dial !== "+39") digits = digits.replace(/^0+/, "");
+    const digits = stripTrunkZero(raw.replace(/\D/g, ""), country.dial);
     onChangeNational(digits.slice(0, 14));
   };
 

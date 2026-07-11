@@ -50,20 +50,22 @@ export function HandoffScreen() {
   useEffect(() => {
     if (committed.current) return;
     committed.current = true;
-    const { phone, companion: companionId, personality, environment } = state;
-    if (!phone || !companionId || !personality || !environment) return;
+    const { phone, companion: companionId, personality, environment, sessionToken } = state;
+    if (!phone || !companionId || !personality || !environment || !sessionToken) return;
     void (async () => {
-      const profile = await submitProfile({
-        phone,
-        goals: state.goals,
-        identityWhy: state.identityWhy.trim(),
-        companion: companionId,
-        personality,
-        environment,
-        smsPrefs: state.smsPrefs,
-      });
+      const profile = await submitProfile(
+        {
+          goals: state.goals,
+          identityWhy: state.identityWhy.trim(),
+          companion: companionId,
+          personality,
+          environment,
+          smsPrefs: state.smsPrefs,
+        },
+        sessionToken
+      );
       if (profile.ok) {
-        await sendWelcomeSms({ phone });
+        await sendWelcomeSms(sessionToken);
       }
     })();
     // Intentionally run once with the state present at handoff.

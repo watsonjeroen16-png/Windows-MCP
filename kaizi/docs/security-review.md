@@ -21,44 +21,109 @@ A single missing/typo'd env var in a production deploy would let anyone "verify"
 **Fix applied:** `kaizi/server/src/index.ts:15-23` now refuses to start (`process.exit(1)`) when `mockMode && NODE_ENV === "production"`. Dev/CI behavior is unchanged.
 **Remaining recommendation:** set `NODE_ENV=production` in the production process manager (the guard depends on it), and alert on the `[kaizi] TWILIO MOCK MODE` log line as defense in depth.
 
-### H-2. No authentication after verification — profile and welcome endpoints trust a bare phone number
+### H-2. No authentication after verification — profile and welcome endpoints trust a bare phone number — FIXED
 
-- `kaizi/server/src/routes/onboarding.ts:15-42` — `POST /api/onboarding/profile` accepts any body whose `phone` matches a verified user, then **overwrites** that user's goals, `identityWhy`, companion, personality, environment, and SMS prefs.
+- `kaizi/server/src/routes/onboarding.ts:15-42` — `POST /api/onboarding/profile` accepted any body whose `phone` matches a verified user, then **overwrote** that user's goals, `identityWhy`, companion, personality, environment, and SMS prefs.
 - `kaizi/server/src/routes/sms.ts:30-72` — `POST /api/sms/welcome` similarly keyed by phone alone.
-- `kaizi/app/src/api/client.ts:65-80` — the client sends no credential; there is none to send.
+- `kaizi/app/src/api/client.ts:65-80` — the client sent no credential; there was none to send.
 
-Verifying a code never yields a session token, so possession of someone's phone *number* (not their phone) is full write access to their profile and companion memory (`insertMemoryEntry`, onboarding.ts:47 — attacker-controlled `identityWhy` lands in the append-only memory that is later echoed into SMS bodies via `renderWelcomeSms`, sms.ts:65-69). `welcomed_at` limits the SMS itself to one send per user, but profile overwrite is unlimited and repeatable.
+Verifying a code never yielded a session token, so possession of someone's phone *number* (not their phone) was full write access to their profile and companion memory.
 
-**Recommended fix (structural):** on `verify/check` approval, issue a short-lived signed token (JWT or random opaque token stored server-side) bound to the phone; require it as `Authorization: Bearer` on `/api/onboarding/profile` and `/api/sms/welcome`, and derive the phone from the token rather than the body. This is the single most important pre-production change after H-1.
+**Fix applied (2026-07-11, confidence pass):** `POST /api/verify/check` now
+issues a short-lived (30 min), HMAC-signed, stateless session token bound to
+the phone (`kaizi/server/src/services/session-token.ts`,
+`createSessionTokenService`). `POST /api/onboarding/profile` and
+`POST /api/sms/welcome` require it as `Authorization: Bearer <token>`
+(`kaizi/server/src/middleware/auth.ts`, `requireAuth`) and derive the phone
+from the verified token — a `phone` field in the request body, if sent, is
+inert (stripped by Zod's default unknown-key handling; the two schemas no
+longer declare it, see `schemas.ts`). Missing/malformed/forged/expired
+tokens get `401 {"error":"unauthorized"}`. The signing secret is
+`SESSION_SECRET`; if unset, a per-process random secret is generated for
+dev/CI convenience, and — mirroring the H-1 guard — the server refuses to
+start with a generated secret when `NODE_ENV=production`
+(`kaizi/server/src/index.ts`).
+
+The app (`kaizi/app/src/api/client.ts`, `src/state/OnboardingContext.tsx`,
+`src/screens/VerifyCodeScreen.tsx`, `src/screens/HandoffScreen.tsx`) stores
+the token on successful verification and sends it on both endpoints.
+
+Verified with: new/updated unit tests (`test/profile.test.ts`,
+`test/welcome.test.ts`, `test/verify.test.ts`, `test/e2e.onboarding.test.ts`
+— 401 on missing/malformed/forged/expired tokens, a spoofed `phone` field in
+the body is proven inert, tokens verified independently signed/expired) and
+a live curl walkthrough against the real server + real Postgres (see
+`docs/confidence-report.md`).
+
+**Bonus fix found while testing this (TOCTOU race in `/api/sms/welcome`):**
+the "already welcomed?" check and the `welcomed_at` write were two separate
+non-atomic steps with an `await sms.sendSms(...)` in between, so two
+concurrent requests could both observe `welcomed_at = null` and both trigger
+a real Twilio send. `Db.markWelcomed` is now an atomic claim-or-fail
+(`UPDATE ... WHERE welcomed_at IS NULL` in Postgres, an equivalent
+check-and-set in the in-memory test double); the route claims *before*
+rendering/sending, and the loser gets `409 already_welcomed` without ever
+sending. Regression test: `test/welcome.test.ts` "sends exactly once under
+concurrent double-submit", and `test/db-integration.test.ts` "markWelcomed
+is atomic" against real Postgres.
 
 ---
 
 ## Medium
 
-### M-1. SMS-pumping economics: per-IP/per-phone limits don't cap aggregate spend
+### M-1. SMS-pumping economics: per-IP/per-phone limits don't cap aggregate spend — FIXED (a, b); (c), (d) remain operational follow-ups
 
-- `kaizi/server/src/app.ts:58-62` and `kaizi/server/src/middleware/rate-limit.ts:10-18` — `/api/verify/*` is limited to 5/min **per IP** and 5/min **per phone**.
+- `kaizi/server/src/app.ts:58-62` and `kaizi/server/src/middleware/rate-limit.ts:10-18` — `/api/verify/*` was limited to 5/min **per IP** and 5/min **per phone**.
 
-5/min/IP still allows ~7,200 Twilio Verify sends per IP per day, each costing money and each deliverable to attacker-chosen premium-rate numbers (classic SMS pumping / toll fraud). Distinct phones from a botnet are effectively uncapped. The per-phone limiter protects a victim's phone, not the Twilio bill.
+5/min/IP still allowed ~7,200 Twilio Verify sends per IP per day, each costing money and each deliverable to attacker-chosen premium-rate numbers (classic SMS pumping / toll fraud). Distinct phones from a botnet were effectively uncapped. The per-phone limiter protected a victim's phone, not the Twilio bill.
 
-**Recommended fix:** add (a) a much tighter per-phone daily cap on `/verify/start` (e.g. 5/day), (b) a global sends-per-hour circuit breaker with alerting, (c) enable Twilio Verify Fraud Guard and restrict Geo Permissions to launch countries, (d) consider a proof-of-work/attestation or CAPTCHA gate if abuse appears.
+**Fix applied (2026-07-11, confidence pass):**
+(a) `POST /api/verify/start` now also enforces a per-phone **daily** cap
+(default 5/day, `PhoneRateLimiter` reused with a 24h window — see
+`kaizi/server/src/app.ts`, `dailyPhoneLimiter`).
+(b) A `GlobalSendCircuitBreaker` (`kaizi/server/src/middleware/rate-limit.ts`)
+caps aggregate outbound sends (default 300/hour) across **all** phones,
+shared between `/api/verify/start` and `/api/sms/welcome`; tripping it logs
+a loud `console.error` (`GLOBAL SEND CIRCUIT BREAKER OPEN`) for alerting and
+returns `503 {"error":"circuit_open"}`. Verified with
+`test/verify.test.ts` ("returns 429 after exceeding the per-phone DAILY
+cap", "trips the global send circuit breaker ... across distinct phones").
+(c) and (d) — Twilio Verify Fraud Guard, Geo Permissions, and any
+CAPTCHA/attestation gate — are operational/account-console configuration
+and a possible future dependency addition respectively; out of scope for
+this code-level pass, left as follow-ups in the checklist below.
 
-### M-2. Phone-number enumeration oracle on unauthenticated endpoints
+As a related, low-cost hardening while touching this code: M-3 below
+(rate-limiting `/api/onboarding` and `/api/sms`) was also applied, since
+requiring auth (H-2) plus a one-line per-IP limiter on those two routers was
+a natural, minimal extension of the same change.
+
+### M-2. Phone-number enumeration oracle on unauthenticated endpoints — CLOSED (by H-2)
 
 - `kaizi/server/src/routes/onboarding.ts:20-33` — `404 phone_not_found` vs `409 phone_not_verified` vs `200`.
 - `kaizi/server/src/routes/sms.ts:35-49` — `404 phone_not_found` vs `409 profile_missing` vs `409 already_welcomed`.
 
-Anyone can probe arbitrary E.164 numbers and learn whether they belong to a Kaizi user and how far through onboarding they got — a PII disclosure in itself (membership in a behavior-change app) and a targeting aid for H-2. The verify endpoints are enumeration-safe (Twilio Verify responds uniformly); these two are not.
+Anyone could probe arbitrary E.164 numbers and learn whether they belong to a Kaizi user and how far through onboarding they got. The verify endpoints were already enumeration-safe (Twilio Verify responds uniformly); these two were not.
 
-**Recommended fix:** after H-2's token auth, these distinctions become harmless (the caller already proved control of the phone). If tokens are deferred, collapse `phone_not_found` into the neighboring 409s or return a uniform 404.
+**Resolved by H-2:** both endpoints now require a valid session token proving
+control of the phone before any of these distinctions are reachable —
+without one, every caller gets a uniform `401 unauthorized` regardless of
+whether the phone exists. The status-code distinctions themselves are
+unchanged (still useful signal for a caller who legitimately owns the
+token), but they're no longer reachable by an unauthenticated prober.
 
-### M-3. Rate limiting absent on `/api/onboarding/profile` and `/api/sms/welcome`
+### M-3. Rate limiting absent on `/api/onboarding/profile` and `/api/sms/welcome` — FIXED
 
-- `kaizi/server/src/app.ts:63-72` — only `/api/verify` is behind a limiter.
+- `kaizi/server/src/app.ts:63-72` — only `/api/verify` was behind a limiter.
 
-`/profile` performs 4+ DB statements per request and appends a `memory_entries` row every time `identityWhy` changes (onboarding.ts:46-48) — an attacker who knows one verified phone (or verified their own) can grow that table without bound, alternating two strings. `/welcome` is a cheap DB probe when it doesn't send.
+`/profile` performs 4+ DB statements per request and appends a `memory_entries` row every time `identityWhy` changes (onboarding.ts:46-48) — an attacker who knew one verified phone (or verified their own) could grow that table without bound, alternating two strings. `/welcome` was a cheap DB probe when it didn't send.
 
-**Recommended fix:** apply the existing `createVerifyIpRateLimit` (with its own budget, e.g. 10/min) to both routers; one line each in `app.ts`. Kept out of this review's applied changes only because it alters public behavior.
+**Fix applied (2026-07-11, confidence pass):** both routers now sit behind
+their own `createVerifyIpRateLimit` instance (5/min per IP, same budget as
+`/api/verify`, independently tracked — see `kaizi/server/src/app.ts`). Now
+layered under H-2's auth requirement, so this is defense in depth against a
+caller with a valid token hammering their own endpoints, not the primary
+control.
 
 ### M-4. CORS is wide open
 
@@ -92,11 +157,18 @@ Dev-only by design, and H-1's guard now prevents mock mode in production, so thi
 
 Behind the typical production LB/proxy every request shares the proxy's IP, so 5/min becomes a *global* limit (self-DoS) — or, if someone later sets `trust proxy` to `true` carelessly, `X-Forwarded-For` spoofing bypasses the limit entirely. **Recommended fix:** at deploy time set `app.set("trust proxy", 1)` (or the exact hop count) and verify `req.ip` reflects the client.
 
-### L-3. In-memory rate limiter state: unbounded growth and lost on restart
+### L-3. In-memory rate limiter state: unbounded growth and lost on restart — PARTIALLY FIXED
 
-- `kaizi/server/src/middleware/rate-limit.ts:26` — `PhoneRateLimiter.hits` map only prunes a phone's timestamps when that phone recurs; unique phone strings accumulate forever (bounded memory-growth DoS), and both limiters reset on process restart or fall apart with >1 replica.
+- `kaizi/server/src/middleware/rate-limit.ts:26` — `PhoneRateLimiter.hits` map only pruned a phone's timestamps when that phone recurred; unique phone strings accumulated forever (bounded memory-growth DoS), and both limiters reset on process restart or fall apart with >1 replica.
 
-**Recommended fix:** periodic sweep of stale entries (or an LRU cap) now; a Redis-backed store for both limiters when scaling past one process.
+**Fix applied (2026-07-11, confidence pass):** `PhoneRateLimiter.sweep()`
+drops phones with no hits inside the window; `createApp()` now runs it
+every 10 minutes for both the per-minute and per-phone-daily limiters
+(`kaizi/server/src/app.ts`, `.unref()`'d so it never keeps a process or test
+run alive). **Still open:** state is still per-process and lost on
+restart/reset across replicas — a Redis-backed store is the real fix once
+scaling past one process, left as a follow-up since it's a new dependency
+and out of proportion for the current MVP.
 
 ### L-4. Verify responses disclose internals (cosmetic)
 
@@ -132,13 +204,24 @@ Fine for localhost; in production the app would send phone numbers and identity 
 
 ## Before production checklist
 
-1. [ ] **Auth token after verification** (H-2): issue on `verify/check` approval; require on `/api/onboarding/profile` and `/api/sms/welcome`; take the phone from the token, not the body.
-2. [ ] Set `NODE_ENV=production` in the prod process manager so the new mock-mode guard (H-1, `index.ts:15-23`) is active; alert on any `TWILIO MOCK MODE` log line.
-3. [ ] SMS-pumping controls (M-1): per-phone daily cap on `/verify/start`, global send circuit breaker + spend alerts, Twilio Fraud Guard on, Geo Permissions restricted to launch countries.
-4. [ ] Rate-limit `/api/onboarding` and `/api/sms` (M-3) and remove the enumeration oracle (M-2 — free once auth lands).
+1. [x] **Auth token after verification** (H-2): issue on `verify/check` approval; require on `/api/onboarding/profile` and `/api/sms/welcome`; take the phone from the token, not the body. **Done 2026-07-11** — see H-2 above.
+2. [ ] Set `NODE_ENV=production` in the prod process manager so the mock-mode guard (H-1, `index.ts:15-23`) and the new `SESSION_SECRET` guard (H-2, same file) are active; alert on any `TWILIO MOCK MODE` or `SESSION_SECRET not set` log line. Also set a real `SESSION_SECRET` — the auto-generated dev fallback invalidates every session on restart and can't be shared across replicas.
+3. [x] SMS-pumping controls (M-1): per-phone daily cap on `/verify/start` and a global send circuit breaker + logged alert are **done 2026-07-11**. Twilio Fraud Guard on and Geo Permissions restricted to launch countries remain operational (Twilio console) follow-ups, not code changes.
+4. [x] Rate-limit `/api/onboarding` and `/api/sms` (M-3) and remove the enumeration oracle (M-2) — **both done 2026-07-11**, the latter as a free consequence of H-2.
 5. [ ] Pin or remove CORS (M-4).
-6. [ ] Set `app.set("trust proxy", <hops>)` for the real topology and confirm `req.ip` (L-2); move limiter state to Redis if running >1 replica (L-3).
+6. [ ] Set `app.set("trust proxy", <hops>)` for the real topology and confirm `req.ip` (L-2); move limiter state to Redis if running >1 replica (L-3 — in-process sweep landed 2026-07-11, cross-replica store is still open).
 7. [ ] User deletion path + retention policy for `memory_entries`; encrypted DB storage/backups (M-5).
 8. [ ] Gate the app's offline mock behind `__DEV__` and require an `https` API URL in release builds (L-5, L-6).
 9. [ ] Tighten the code schema to `\d{6}`, drop `mock`/`detail` from client-facing verify responses (L-4); mask phones in mock logs (L-1).
 10. [ ] Confirm `.env` is absent from the repo and CI secrets are injected via the deploy platform, never baked into images.
+
+### Resolved in this pass (2026-07-11, confidence engineering review)
+
+H-2 (auth token), M-1 (a/b — SMS-pumping daily cap + circuit breaker), M-2
+(enumeration oracle, closed as a consequence of H-2), M-3 (rate limiting on
+onboarding/sms), and a partial L-3 (in-process sweep of stale rate-limit
+entries). A previously-undocumented TOCTOU race in `/api/sms/welcome` (two
+concurrent requests could both trigger a real Twilio send) was found while
+writing tests for H-2 and fixed alongside it — see H-2 above and
+`docs/confidence-report.md` for full verification evidence (tests + live
+curl walkthroughs against real Postgres).
