@@ -83,8 +83,10 @@ describe("POST /api/sms/welcome", () => {
     expect(res.body.body).not.toContain("{");
     expect(res.body.body.length).toBeLessThanOrEqual(SMS_MAX_LENGTH);
 
-    // Mock service logged the send.
-    expect(ctx.smsLog.some((line) => line.includes(PHONE))).toBe(true);
+    // Mock service logged the send, with the phone masked (not in full — see
+    // docs/security-review.md L-1).
+    expect(ctx.smsLog.some((line) => line.includes(maskPhone(PHONE)))).toBe(true);
+    expect(ctx.smsLog.some((line) => line.includes(PHONE))).toBe(false);
 
     const user = await ctx.db.getUserByPhone(PHONE);
     expect(user!.welcomed_at).toBeInstanceOf(Date);
