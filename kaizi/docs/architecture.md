@@ -1,11 +1,19 @@
 # Kaizi — Architecture (Onboarding MVP)
 
-Status: living document. Scope of this build: **onboarding flow only** (founder
-directive, July 2026). The 7 onboarding frames plus the supporting backend are
-the entire product surface for now — the app deliberately ends on the
-post-verification handoff screen. Mission Hub, Companion World, Progress, and
-Profile are documented in `design/wireframes.md` as future context only; no code
-exists for them and none should be added without a new directive.
+Status: living document. This document describes the **onboarding MVP** that
+shipped first (founder directive, July 2026): the 7 onboarding frames plus the
+supporting backend, with the app resting on the post-verification handoff
+screen and the relationship continuing over SMS. That scope is complete and
+covered below.
+
+**Companion World build now underway.** Per founder decision (2026-07-11), a
+second phase — the post-onboarding core app (living Companion World, real
+companion chat, Intentions, customization, Reflection) — is now authorized and
+in active development; see `design/world-build-plan.md` for its architecture,
+sequencing, and status, and `design/world-spec.md` for the approved retention
+mechanics it implements. Mission Hub, Progress, and Profile screens beyond
+what `world-build-plan.md` scopes are still documented in `design/wireframes.md`
+as future context only.
 
 ## System overview
 
@@ -71,7 +79,10 @@ exists for them and none should be added without a new directive.
 | `POST /api/onboarding/profile` | Persist goals, identityWhy, companion, personality, environment, smsPrefs |
 | `POST /api/sms/welcome` | Send the personality-toned first companion SMS |
 
-Anything beyond these four endpoints is out of scope for this build.
+Anything beyond these four endpoints was out of scope for the onboarding MVP.
+The Companion World phase adds a second set of endpoints (chat, Intentions,
+customization, journal) on an additive migration — see
+`design/world-build-plan.md` for that surface.
 
 ## Security notes
 

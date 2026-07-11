@@ -2,6 +2,7 @@ import request from "supertest";
 import { describe, expect, it } from "vitest";
 
 import type { Personality } from "../src/schemas.js";
+import { maskPhone } from "../src/services/twilio.js";
 import { SMS_MAX_LENGTH } from "../src/services/sms-templates.js";
 import { authHeaderFor, makeTestApp, VALID_PROFILE_BODY } from "./helpers/make-app.js";
 

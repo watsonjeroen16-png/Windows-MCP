@@ -166,7 +166,7 @@ All compositions sit on a `shadow.figure` ground ellipse. Preview canvas ~120×1
 |---|---|---|
 | **Cyber City** | `#0A0E1A → #16204A → #2A1A4A` | 2 neon dots (`rgba(90,200,255,0.5)`, `rgba(255,90,180,0.4)`) `lantern-glow` staggered |
 | **Modern Apartment** | `#141210 → #241E16 → #3A2E1E` | Warm window rect (`gold.glow8`) slow `lantern-glow` |
-| **Forest Village** | `#0A140C → #14261А`* → `#1E3820` (*use `#14261A`) | 1 blossom-style leaf particle drifting (`blossom-fall`, green `rgba(140,190,120,0.4)`) |
+| **Forest Village** | `#0A140C → #14261A → #1E3820` | 1 blossom-style leaf particle drifting (`blossom-fall`, green `rgba(140,190,120,0.4)`) |
 | **Mountain Retreat** | `#0C1016 → #1A2430 → #2E3A46` | Fog band `fog-drift` across the midline |
 | **Dojo** | `#160F0A → #2A1A10 → #3A2416` | Lantern dot `gold.line25` `lantern-glow` |
 | **Coastal Paradise** | `#081420 → #0E2A3A → #1A4A50` | Water ellipse `water-ripple` at bottom third |

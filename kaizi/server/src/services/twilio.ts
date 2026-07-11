@@ -36,22 +36,33 @@ export interface SmsService {
 
 export const MOCK_APPROVAL_CODE = "000000";
 
+/**
+ * Mask a phone number for logging: keep the leading "+" and the last 4
+ * digits, replace everything between with "*". Mock-mode logs are dev-only
+ * and never reach production (see H-1's mock-mode-in-production guard), but
+ * logs outlive intentions — see docs/security-review.md L-1.
+ */
+export function maskPhone(phone: string): string {
+  if (phone.length <= 5) return phone;
+  return "+" + "*".repeat(phone.length - 5) + phone.slice(-4);
+}
+
 export function createMockSmsService(
   log: (msg: string) => void = (msg) => console.log(msg)
 ): SmsService {
   return {
     mock: true,
     async startVerification(phone: string): Promise<VerifyStartResult> {
-      log(`[twilio:mock] verify start for ${phone} (code is ${MOCK_APPROVAL_CODE})`);
+      log(`[twilio:mock] verify start for ${maskPhone(phone)} (code is ${MOCK_APPROVAL_CODE})`);
       return { status: "pending", mock: true };
     },
     async checkVerification(phone: string, code: string): Promise<VerifyCheckResult> {
       const approved = code === MOCK_APPROVAL_CODE;
-      log(`[twilio:mock] verify check for ${phone}: ${approved ? "approved" : "rejected"}`);
+      log(`[twilio:mock] verify check for ${maskPhone(phone)}: ${approved ? "approved" : "rejected"}`);
       return { approved, mock: true };
     },
     async sendSms(to: string, body: string): Promise<SendSmsResult> {
-      log(`[twilio:mock] SMS to ${to}:\n${body}`);
+      log(`[twilio:mock] SMS to ${maskPhone(to)}:\n${body}`);
       return { status: "queued", mock: true, body };
     },
   };

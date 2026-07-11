@@ -66,7 +66,7 @@ const PERSONALITY_VOICE: Record<Personality, { tag: string; sampleLine: string; 
   };
 
 /** Small hardcoded mock-mode reply pool per personality — mirrors sms-templates.ts's mock idea. */
-const MOCK_REPLIES: Record<Personality, string[]> = {
+export const MOCK_REPLIES: Record<Personality, string[]> = {
   coach: [
     "Good — you showed up. Now let's turn that into today's win.",
     "That's the step one I wanted to hear. What's next on the list?",
