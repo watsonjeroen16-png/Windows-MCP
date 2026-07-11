@@ -13,6 +13,15 @@ async function main(): Promise<void> {
   const config = loadConfig();
 
   if (config.mockMode) {
+    // Fail closed: mock verification approves the fixed code "000000" for any
+    // phone. That must never be reachable in production.
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "[kaizi] FATAL: Twilio env vars are missing but NODE_ENV=production — " +
+          "refusing to start with mock verification (code 000000 would approve any phone)."
+      );
+      process.exit(1);
+    }
     console.log(
       "[kaizi] TWILIO MOCK MODE — one or more Twilio env vars are missing.\n" +
         `[kaizi]   verify: code "${MOCK_APPROVAL_CODE}" approves; SMS bodies are logged, not sent.`

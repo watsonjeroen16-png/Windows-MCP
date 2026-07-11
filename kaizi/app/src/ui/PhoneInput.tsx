@@ -79,7 +79,13 @@ export function PhoneInput({
   }, [query]);
 
   const handleDigits = (raw: string) => {
-    onChangeNational(raw.replace(/\D/g, "").slice(0, 14));
+    let digits = raw.replace(/\D/g, "");
+    // Users habitually type the national trunk prefix ("0612…"), which would
+    // yield a non-dialable E.164 like +3106… — strip leading zeros. Italy is
+    // the known exception (landlines keep the 0), but this field collects
+    // mobile numbers and Italian mobiles never start with 0.
+    if (country.dial !== "+39") digits = digits.replace(/^0+/, "");
+    onChangeNational(digits.slice(0, 14));
   };
 
   return (

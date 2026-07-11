@@ -13,6 +13,11 @@ onboarding (goals, identity, companion, personality, environment, SMS setup with
 phone verification) backed by an API that persists the profile and sends the
 companion's first personalized SMS.
 
+**New to the project?** Start with the
+**[Founder Guide](docs/founder-guide.md)** — a friendly, step-by-step
+walkthrough from a blank machine to completing onboarding on your phone and
+receiving the companion's first SMS (mock mode and real Twilio mode).
+
 ## Monorepo layout
 
 ```
@@ -22,7 +27,7 @@ kaizi/
 ├── docs/
 │   ├── design/     Mockup, wireframes, onboarding spec, design tokens
 │   ├── architecture.md
-│   └── qa-report.md
+│   └── founder-guide.md   Step-by-step run-it-yourself guide
 └── README.md   (this file)
 ```
 
@@ -61,7 +66,8 @@ docker run -d --name kaizi-pg -e POSTGRES_PASSWORD=kaizi -e POSTGRES_DB=kaizi -p
 | `TWILIO_VERIFY_SERVICE_SID` | Verify v2 service SID (`VA...`) for phone verification |
 | `TWILIO_MESSAGING_FROM` | E.164 number (or Messaging Service SID) the companion texts from |
 
-Leave all four unset for mock mode (development without Twilio).
+Mock mode activates when **any** of the four is unset — all four are required
+for live Twilio mode (development without Twilio needs none of them).
 
 ## Running the app
 
