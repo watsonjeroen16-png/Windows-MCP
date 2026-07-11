@@ -5,6 +5,8 @@
  * never crash (or make network calls) without credentials.
  */
 
+import { randomBytes } from "node:crypto";
+
 export interface TwilioConfig {
   accountSid: string;
   authToken: string;
@@ -18,6 +20,10 @@ export interface AppConfig {
   mockMode: boolean;
   twilio: TwilioConfig | null;
   enforceQuietHours: boolean;
+  /** HMAC secret for signing post-verification session tokens (see services/session-token.ts). */
+  sessionSecret: string;
+  /** True when SESSION_SECRET was not set and a random one was generated for this process. */
+  sessionSecretGenerated: boolean;
 }
 
 function truthy(value: string | undefined): boolean {
@@ -32,6 +38,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
 
   const haveAllTwilio = Boolean(accountSid && authToken && verifyServiceSid && messagingFrom);
 
+  const envSessionSecret = env.SESSION_SECRET?.trim();
+  const sessionSecretGenerated = !envSessionSecret;
+  // Dev/CI convenience: generate a per-process secret when unset so the
+  // server never crashes for lack of config. index.ts refuses to start with
+  // a generated secret when NODE_ENV=production (same pattern as H-1).
+  const sessionSecret = envSessionSecret ?? randomBytes(32).toString("hex");
+
   return {
     port: Number(env.PORT ?? 4000),
     databaseUrl: env.DATABASE_URL ?? "postgres://postgres:kaizi@localhost:5432/kaizi",
@@ -45,5 +58,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
         }
       : null,
     enforceQuietHours: truthy(env.KAIZI_ENFORCE_QUIET_HOURS),
+    sessionSecret,
+    sessionSecretGenerated,
   };
 }
