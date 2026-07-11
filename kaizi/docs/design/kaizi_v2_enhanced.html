@@ -215,7 +215,12 @@ body {
 .firefly {
   position: absolute; width: 3px; height: 3px; border-radius: 50%;
   background: rgba(222,236,150,0.9); box-shadow: 0 0 6px 2px rgba(212,230,130,0.35);
-  opacity: 0; animation: firefly 7s ease-in-out infinite; pointer-events: none;
+  opacity: 0; pointer-events: none;
+  /* JS-spawned instances (see spawnFirefly) set --wx1/--wy1/--wx2/--wy2 and an
+     inline animation-duration so each wander path is unique; this uses the
+     firefly-wander keyframe (distinct from the plain "firefly" keyframe still
+     used by the couple of hand-placed accent sparkles in the SVG). */
+  animation-name: firefly-wander; animation-timing-function: ease-in-out; animation-fill-mode: forwards;
 }
 /* ---------- particles: blossoms / leaves ----------
    JS-spawned instances set --fx/--fy/--fr (and --dur via inline
@@ -1481,6 +1486,330 @@ function swipeCard(dir) {
     setTimeout(() => { card.style.animation = ''; }, 400);
   }, 380);
 }
+
+/* =========================================================================
+   ENHANCED MOTION LAYER
+   Parallax depth, richer particles, lighting, layered companion motion, and
+   live demos of world-spec proposals #1 (presence-aware return), #2
+   (companion-initiated speech) and #6 (streak-driven world states).
+   ========================================================================= */
+
+function clamp(v, a, b) { return Math.min(b, Math.max(a, v)); }
+function rand(a, b) { return a + Math.random() * (b - a); }
+function choice(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+const REDUCE_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- parallax depth ----------
+   One flat SVG scene, four depth planes: sky drifts least, hills a little
+   more, the grove more still, and the foreground ground + companion the
+   most — from ambient drift plus mouse/touch/device-tilt. */
+function initParallax() {
+  const phoneEl = document.getElementById('phone');
+  const skyLayer = document.getElementById('skyLayer');
+  const plHills = document.getElementById('plHills');
+  const plGrove = document.getElementById('plGrove');
+  const groundEls = [document.getElementById('groundLayer'), ...document.querySelectorAll('.pl-ground')];
+  let px = 0, py = 0;
+  const t0 = performance.now();
+
+  function onPointer(e) {
+    const r = phoneEl.getBoundingClientRect();
+    const p = e.touches ? e.touches[0] : e;
+    px = clamp(((p.clientX - r.left) / r.width) * 2 - 1, -1, 1);
+    py = clamp(((p.clientY - r.top) / r.height) * 2 - 1, -1, 1);
+  }
+  if (!REDUCE_MOTION) {
+    phoneEl.addEventListener('mousemove', onPointer);
+    phoneEl.addEventListener('touchmove', onPointer, { passive: true });
+    phoneEl.addEventListener('mouseleave', () => { px = 0; py = 0; });
+    window.addEventListener('deviceorientation', (e) => {
+      if (e.gamma == null) return;
+      px = clamp(e.gamma / 30, -1, 1);
+      py = clamp((e.beta - 45) / 30, -1, 1);
+    });
+  }
+
+  function setXY(el, x, y) { if (el) el.style.transform = 'translate3d(' + x.toFixed(2) + 'px,' + y.toFixed(2) + 'px,0)'; }
+
+  function frame(now) {
+    const t = (now - t0) / 1000;
+    const driftX = REDUCE_MOTION ? 0 : Math.sin(t * 0.045) * 1.1;
+    const driftY = REDUCE_MOTION ? 0 : Math.cos(t * 0.033) * 0.6;
+    const tx = REDUCE_MOTION ? 0 : px, ty = REDUCE_MOTION ? 0 : py;
+    setXY(skyLayer, (tx + driftX) * 2.2, (ty + driftY) * 1.2);
+    setXY(plHills, (tx + driftX) * 4, (ty + driftY) * 2);
+    setXY(plGrove, (tx + driftX) * 7.5, (ty + driftY) * 3.4);
+    groundEls.forEach(el => setXY(el, (tx + driftX) * 11, (ty + driftY) * 5));
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+}
+initParallax();
+
+/* ---------- wind: drives particle drift, gusts occasionally ---------- */
+const wind = { base: 0, gust: 0 };
+function updateWind(now) {
+  wind.base = Math.sin(now / 9000) * 0.5 + Math.sin(now / 3700) * 0.25;
+  wind.gust *= 0.965; // gust decays back toward zero
+}
+function windTotal() { return wind.base + wind.gust; }
+function windLoop(now) { updateWind(now); requestAnimationFrame(windLoop); }
+requestAnimationFrame(windLoop);
+function scheduleGust() {
+  if (!REDUCE_MOTION && Math.random() < 0.5) wind.gust = (Math.random() < 0.5 ? -1 : 1) * rand(1.4, 3);
+  setTimeout(scheduleGust, rand(9000, 23000));
+}
+if (!REDUCE_MOTION) scheduleGust();
+
+/* ---------- particle system: blossoms / autumn leaves, fireflies, embers ----------
+   Each spawned particle gets its own randomized fall path (--fx/--fy/--fr) and
+   duration instead of sharing one hand-authored parabola; density and type
+   respond to time-of-day, wind gusts, and season (autumn once the maple has
+   turned, see setMapleSeason). */
+const particleLayer = document.getElementById('particles');
+
+function spawnBlossom() {
+  const autumn = document.body.dataset.season === 'autumn';
+  const el = document.createElement('div');
+  el.className = autumn ? 'blossom leaf' : 'blossom';
+  const size = rand(4, 7);
+  const dur = rand(8, 16);
+  el.style.left = rand(4, 78) + '%';
+  el.style.top = rand(295, 372) + 'px';
+  el.style.width = size + 'px';
+  el.style.height = size + 'px';
+  el.style.setProperty('--fx', (rand(24, 90) + windTotal() * 30) + 'px');
+  el.style.setProperty('--fy', rand(360, 500) + 'px');
+  el.style.setProperty('--fr', rand(140, 360) + 'deg');
+  el.style.animationDuration = dur + 's';
+  particleLayer.appendChild(el);
+  setTimeout(() => el.remove(), dur * 1000 + 150);
+}
+function spawnFirefly() {
+  const el = document.createElement('div');
+  el.className = 'firefly';
+  el.style.left = rand(55, 320) + 'px';
+  el.style.top = rand(415, 600) + 'px';
+  el.style.setProperty('--wx1', rand(6, 16) + 'px');
+  el.style.setProperty('--wy1', rand(-20, -8) + 'px');
+  el.style.setProperty('--wx2', rand(14, 28) + 'px');
+  el.style.setProperty('--wy2', rand(-10, 4) + 'px');
+  const dur = rand(5, 9);
+  el.style.animationDuration = dur + 's';
+  particleLayer.appendChild(el);
+  setTimeout(() => el.remove(), dur * 1000 + 150);
+}
+function spawnEmber() {
+  const el = document.createElement('div');
+  el.className = 'ember';
+  const cx = Math.random() < 0.5 ? 172 : 322;
+  const cy = cx === 172 ? 437 : 450;
+  el.style.left = (cx + rand(-9, 9)) + 'px';
+  el.style.top = cy + 'px';
+  el.style.setProperty('--ex', (windTotal() * 18 + rand(-8, 8)) + 'px');
+  particleLayer.appendChild(el);
+  setTimeout(() => el.remove(), 3800);
+}
+function particleDensity() {
+  const tod = TODS[todIdx];
+  const gustBoost = Math.abs(windTotal()) > 1.3 ? 0.55 : 1; // gustier wind = more falling petals, more often
+  return {
+    blossom: (tod === 'dawn' || tod === 'dusk' ? 1500 : tod === 'day' ? 2800 : 5400) * gustBoost,
+    firefly: tod === 'night' ? 1500 : tod === 'dusk' ? 2600 : Infinity,
+    ember: (tod === 'night' || tod === 'dusk') ? 4200 : Infinity,
+  };
+}
+function lanternsLit() {
+  const l1 = document.getElementById('lantern1'), l2 = document.getElementById('lantern2');
+  return (l1 && !l1.classList.contains('locked')) || (l2 && !l2.classList.contains('locked'));
+}
+function blossomLoop() { if (!REDUCE_MOTION) spawnBlossom(); setTimeout(blossomLoop, particleDensity().blossom + rand(0, 1400)); }
+function fireflyLoop() {
+  const d = particleDensity().firefly;
+  if (!REDUCE_MOTION && d < Infinity) spawnFirefly();
+  setTimeout(fireflyLoop, (d < Infinity ? d : 4000) + rand(0, 1600));
+}
+function emberLoop() {
+  const d = particleDensity().ember;
+  if (!REDUCE_MOTION && d < Infinity && lanternsLit()) spawnEmber();
+  setTimeout(emberLoop, (d < Infinity ? d : 4500) + rand(0, 2600));
+}
+
+if (REDUCE_MOTION) {
+  // Reduced motion: a handful of static, non-animated petals for ambience
+  // instead of a continuous JS spawn loop.
+  [15, 40, 65].forEach((leftPct, i) => {
+    const el = document.createElement('div');
+    el.className = 'blossom';
+    el.style.left = leftPct + '%'; el.style.top = (320 + i * 12) + 'px';
+    el.style.opacity = '0.45'; el.style.animation = 'none';
+    particleLayer.appendChild(el);
+  });
+} else {
+  blossomLoop(); fireflyLoop(); emberLoop();
+}
+
+/* ---------- micro-idle pose variations ----------
+   Rarely swaps the current activity pose for a stretch or a glance at the
+   sky for a couple of seconds, so the companion never reads as a rigid loop. */
+const MICRO_IDLES = ['stretch', 'glance'];
+const MICRO_IDLE_CHIP = { stretch: 'Haru pauses to stretch.', glance: 'Haru glances up at the sky.' };
+function scheduleMicroIdle() {
+  setTimeout(() => {
+    if (!moving && !document.getElementById('chatSheet').classList.contains('show') && Math.random() < 0.4) {
+      playMicroIdle();
+    }
+    scheduleMicroIdle();
+  }, rand(24000, 48000));
+}
+function playMicroIdle() {
+  const current = ACTS[actIdx];
+  const variant = choice(MICRO_IDLES);
+  showPose(variant);
+  setChip(MICRO_IDLE_CHIP[variant]);
+  setTimeout(() => {
+    if (!moving) { showPose(current.id); setChip(current.chip); }
+  }, 2700);
+}
+scheduleMicroIdle();
+
+/* ---------- streak-driven world states (world-spec proposal #6) ---------- */
+let streakDay = 0;
+let lastMilestoneLabel = null;
+const STREAK_LINES = {
+  7:  'The first lantern is lit tonight. Did you feel it?',
+  14: 'A second lantern now. The path in is easier to see after dark.',
+  30: 'Thirty days. The azaleas finally opened — for good, this time.',
+  60: 'A third koi found its way into the pond today. Sixty days will do that.',
+  90: 'Ninety days. Even the maple agrees — look at the color it turned.',
+};
+function applyLanternState(gid, pid, lit) {
+  const g = document.getElementById(gid), p = document.getElementById(pid);
+  if (g) g.classList.toggle('locked', !lit);
+  if (p) p.classList.toggle('lit', lit);
+}
+function setMapleSeason(autumn) {
+  document.querySelectorAll('#mapleCanopy [data-green]').forEach(el => {
+    el.setAttribute('fill', autumn ? el.dataset.fall : el.dataset.green);
+  });
+  document.body.dataset.season = autumn ? 'autumn' : 'spring';
+}
+function milestoneLabelFor(n) {
+  if (n >= 90) return 'full bloom';
+  if (n >= 60) return 'third koi';
+  if (n >= 30) return 'azaleas bloomed';
+  if (n >= 14) return 'two lanterns';
+  if (n >= 7) return 'first lantern';
+  return 'seedling';
+}
+function setStreakDay(n) {
+  n = clamp(Math.round(Number(n)), 0, 999);
+  const prev = streakDay;
+  streakDay = n;
+  const world = document.getElementById('world');
+
+  // NOTE — production rule: setStreakDay() must only ever be called with a
+  // non-decreasing value. World-spec proposal #6 is cumulative and, per
+  // proposal #1, there is no decay mechanic — ever. This demo's slider and
+  // quick-jump buttons intentionally allow n to move backward too, purely so
+  // the founder can scrub between milestone states while reviewing; that
+  // backward path is a mockup convenience only and must not exist in the
+  // shipped app.
+  applyLanternState('lantern1', 'pool1', n >= 7);
+  applyLanternState('lantern2', 'pool2', n >= 14);
+  world.classList.toggle('azalea-bloomed', n >= 30);
+  world.classList.toggle('koi3-visible', n >= 60);
+  setMapleSeason(n >= 90);
+
+  [7, 14, 30, 60, 90].forEach(m => { if (n >= m && prev < m) lastMilestoneLabel = STREAK_LINES[m]; });
+
+  const label = document.getElementById('streakLabel');
+  if (label) label.textContent = 'Day ' + n + ' · ' + milestoneLabelFor(n);
+  const slider = document.getElementById('streakSlider');
+  if (slider && Number(slider.value) !== n) slider.value = n;
+}
+
+/* ---------- presence-aware return (world-spec proposal #1) ----------
+   Only the *dialogue* changes with a visit gap — the garden, lantern count
+   and bloom state never regress. This function never touches setStreakDay()
+   or any world-state class; it only ever writes to #greetGap's text. */
+const GAP_LINES = {
+  mid: ["You've been away. The koi missed the noise.", 'A few quiet days. Welcome back to the garden.'],
+  long: ["The garden waited. No rush. Tell me where you left off.", "However long it's been, the lanterns kept burning for you."],
+};
+function setDaysAway(n) {
+  markInteraction();
+  const el = document.getElementById('greetGap');
+  let pool = null;
+  if (n >= 5) pool = GAP_LINES.long;
+  else if (n >= 2) pool = GAP_LINES.mid;
+  el.textContent = pool ? choice(pool) : '';
+  el.style.opacity = pool ? '1' : '0';
+}
+
+/* ---------- companion-initiated speech (world-spec proposal #2) ----------
+   Priority order per world-spec.md: (a) an unkept promise from today,
+   (b) a streak milestone reached today, (c) time-of-day flavor,
+   (d) fallback to the current activity's quote pool. */
+const TOD_FLAVOR = {
+  dawn:  ['"The garden is quiet at this hour. I like it best."', '"Early again. That says something about you."'],
+  day:   ['"The light is good today. Come see."', '"Even a still afternoon is doing something."'],
+  dusk:  ['"My favorite hour. Everything goes gold for a while."', '"The lanterns will wake soon."'],
+  night: ['"The garden sleeps loudly, if you listen."', '"Rest well, whenever you\'re ready to."'],
+};
+function getContextualLine() {
+  if (kept < total) {
+    const remaining = total - kept;
+    return '"' + remaining + ' promise' + (remaining === 1 ? '' : 's') + " still waiting today. No rush — I'll be here.\"";
+  }
+  if (lastMilestoneLabel) {
+    const line = '"' + lastMilestoneLabel + '"';
+    lastMilestoneLabel = null;
+    return line;
+  }
+  const flavor = TOD_FLAVOR[TODS[todIdx]];
+  if (flavor && flavor.length) return choice(flavor);
+  return choice(ACTS[actIdx].quotes);
+}
+
+let lastInteraction = Date.now();
+let lastUnpromptedSpeech = 0;
+let idleWindowThreshold = rand(20000, 30000);
+let idleWindowHandled = false;
+function markInteraction() {
+  lastInteraction = Date.now();
+  idleWindowThreshold = rand(20000, 30000);
+  idleWindowHandled = false;
+}
+['pointerdown', 'click', 'input'].forEach(evt => document.addEventListener(evt, markInteraction, { passive: true }));
+
+setInterval(() => {
+  if (moving) return; // spec: companion must not be mid-transition
+  if (document.getElementById('chatSheet').classList.contains('show')) return;
+  const idleFor = Date.now() - lastInteraction;
+  if (idleFor < idleWindowThreshold || idleWindowHandled) return;
+  idleWindowHandled = true; // one roll per idle window
+  if (Date.now() - lastUnpromptedSpeech < 5 * 60 * 1000) return; // rate limit: 1 per 5 min per session
+  if (Math.random() < 1 / 3) {
+    speak(getContextualLine());
+    lastUnpromptedSpeech = Date.now();
+  }
+}, 4000);
+
+function forceIdleSpeech() {
+  // Demo-only bypass of the timing/rate-limit above, so the founder can
+  // preview the idle-speech line pool on demand instead of waiting it out.
+  if (moving) return;
+  speak(getContextualLine());
+  lastUnpromptedSpeech = Date.now();
+}
+
+/* ---------- init world-state defaults ----------
+   Day 94 matches the greeting copy already in this mockup ("Day 94 · Level 8
+   Pathfinder") — start with the fully bloomed garden and let the demo
+   controls scrub backward to preview earlier milestones. */
+setStreakDay(94);
+lastMilestoneLabel = null; // don't let initial setup itself queue an idle-speech line
 </script>
 </body>
 </html>
