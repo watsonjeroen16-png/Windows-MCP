@@ -44,11 +44,15 @@ services:
       - "4000:4000"
     environment:
       PORT: 4000
-      NODE_ENV: production
+      # NOT "production" on purpose: src/index.ts refuses to boot with
+      # NODE_ENV=production unless either full Twilio creds or a real
+      # SESSION_SECRET-backed live config are present, as a fail-closed guard
+      # against mock verification (code 000000) ever being reachable in prod.
+      # This stack is for local dev/mock-mode use, so it runs as
+      # "development" — the Dockerfile's own ENV NODE_ENV=production is what
+      # a real deployment uses (see server/DEPLOYMENT.md).
+      NODE_ENV: development
       DATABASE_URL: postgres://postgres:kaizi@postgres:5432/kaizi
-      # Session secret must be set for NODE_ENV=production (index.ts refuses
-      # to start otherwise). This is a local-dev-only value — never reuse it
-      # in a real deployment; see server/DEPLOYMENT.md.
       SESSION_SECRET: local-dev-session-secret-change-me
       KAIZI_ENFORCE_QUIET_HOURS: "false"
       # Twilio + ANTHROPIC_API_KEY intentionally left unset: server runs in
