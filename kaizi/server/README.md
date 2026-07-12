@@ -1,9 +1,17 @@
-# Kaizi Server — Onboarding API
+# Kaizi Server — Onboarding + Companion World API
 
-Express + TypeScript backend for the Kaizi onboarding flow. Four endpoints, by
-design (see `../docs/architecture.md`): phone verification (Twilio Verify v2),
-profile persistence (PostgreSQL), and the personality-toned first companion SMS
-(Twilio Messaging). Nothing else.
+Express + TypeScript backend. Two builds live in this codebase (see
+`../docs/architecture.md`):
+
+1. **Onboarding** (shipped): phone verification (Twilio Verify v2), profile
+   persistence (PostgreSQL), and the personality-toned first companion SMS
+   (Twilio Messaging) — four endpoints under `/api/verify`, `/api/onboarding`,
+   `/api/sms`.
+2. **Companion World** (in progress, see `../docs/design/world-build-plan.md`):
+   Intentions, companion chat (real Claude API), post-onboarding customization,
+   and the Reflection journal — four more endpoint groups under
+   `/api/intentions`, `/api/chat`, `/api/customization`, `/api/journal`, all
+   requiring the same session-token auth as onboarding.
 
 ## Setup
 
@@ -72,6 +80,7 @@ See `.env.example` for the full list. Key variables:
 | `TWILIO_*` | Twilio credentials; leave unset (or commented out in `.env`) for mock mode — all four required together for live mode |
 | `KAIZI_ENFORCE_QUIET_HOURS` | `true` to refuse welcome sends 21:30–07:30 server-local (default off) |
 | `SESSION_SECRET` | HMAC secret for signing post-verification session tokens. If unset, a random per-process secret is generated (dev only — tokens invalidate on restart, and the server refuses to start with a generated secret when `NODE_ENV=production`). |
+| `ANTHROPIC_API_KEY` | Claude API key for real companion chat replies (`/api/chat`). Leave unset for mock mode — canned in-voice replies, no network call, no key required for dev/CI. Get one at [console.anthropic.com](https://console.anthropic.com) (separate from any Claude subscription). |
 
 ## Endpoints
 
@@ -81,7 +90,9 @@ All bodies are JSON and validated with Zod; validation failures return
 are each rate-limited per IP (5/min); `/api/verify/*` additionally has a
 per-phone guard (5/min) and a per-phone daily cap (5/day) on `/start`, plus a
 global circuit breaker (300 sends/hour, shared with `/api/sms/welcome`) that
-trips on abnormal aggregate volume. Any of these return
+trips on abnormal aggregate volume. The Companion World routes
+(`/api/intentions`, `/api/chat`, `/api/customization`, `/api/journal`) are
+each rate-limited per IP too (30/min by default). Any of these return
 `429 {"error":"rate_limited"}` or `503 {"error":"circuit_open"}` when tripped.
 
 ### Authentication
@@ -121,10 +132,14 @@ Check the code. On approval the user row is created/updated with
 curl -X POST http://localhost:4000/api/verify/check \
   -H 'content-type: application/json' \
   -d '{"phone":"+15551234567","code":"000000"}'
-# {"status":"approved","verified":true,"userId":"<uuid>","mock":true,
+# {"status":"approved","verified":true,
 #  "token":"<session-token>","expiresAt":"2026-07-11T23:45:03.553Z"}
 # wrong code -> 400 {"error":"invalid_code"} (no token issued)
 ```
+
+(`userId` and `mock` are deliberately not in this response — the app never
+reads either, and echoing them to an unauthenticated caller was cosmetic
+internal-state disclosure; see `docs/security-review.md` L-4.)
 
 ### `POST /api/onboarding/profile`
 
@@ -184,6 +199,56 @@ sentence, first letter lowercased, trailing punctuation stripped — falling bac
 to "you want to change" if derivation fails. Rendered bodies are capped at 320
 chars and never contain a raw placeholder.
 
+## Companion World endpoints
+
+Four more endpoint groups, all requiring `Authorization: Bearer <token>` from
+`verify/check` (same as onboarding/sms; `401 unauthorized` without one), all
+per-IP rate-limited (30/min by default, tighter than verify's 5/min but not
+unbounded — `/api/chat` calls the real Claude API per message once
+`ANTHROPIC_API_KEY` is set, so an unmetered rate is a real-money abuse vector).
+Additive schema (`src/db/migrations/002_companion_world.sql`) — no onboarding
+table is touched.
+
+### `GET /api/intentions` / `POST /api/intentions` / `POST /api/intentions/:id/keep`
+
+Daily habit/commitment instances (the renamed "Promises" mechanic). `GET`
+takes an optional `?date=YYYY-MM-DD` (defaults to today) and returns that
+day's intentions for the authenticated user. `POST` creates one (`title`,
+optional `subtitle`, `rewardGrowth` 0–10000, `scheduledFor` YYYY-MM-DD) with
+status `pending`. `POST /:id/keep` atomically transitions `pending -> kept`
+(claim-or-fail, same pattern as `markWelcomed`) — `409 not_keepable` if the
+intention is missing, not owned by the caller, or already kept/missed.
+
+### `GET /api/chat` / `POST /api/chat`
+
+Companion chat. `GET` returns recent messages (oldest first, `?limit=` capped
+at 200, default 50). `POST` (`content`, 1–2000 chars) persists the user's
+message, calls `getCompanionReply` (`src/services/claude-chat.ts`) — real
+`claude-opus-4-8` via `@anthropic-ai/sdk` when `ANTHROPIC_API_KEY` is set, a
+small in-voice canned-reply pool per personality otherwise (mock mode, mirrors
+`services/twilio.ts`) — persists the reply, and returns both messages. The
+system prompt is built from the user's active personality/species
+(post-onboarding customization if set, else the onboarding choice) plus a
+compact memory digest (goals, identity "why", today's unkept intentions); a
+live API error degrades to the mock reply rather than surfacing a 500.
+
+### `GET /api/customization` / `PUT /api/customization`
+
+Mutable post-onboarding companion appearance/personality/environment — unlike
+onboarding's one-time choice, this can change any time. `GET` returns the
+current row if one exists, else falls back to the original onboarding profile
+choice (`source: "onboarding_profile"` vs `"customization"` in the response),
+or `404 not_customized` if neither exists. `PUT` (`companionSpecies`,
+`personality`, `environment` — same enums as onboarding) upserts the full
+record.
+
+### `GET /api/journal` / `POST /api/journal`
+
+Reflection entries (`content`, 1–4000 chars). `GET` returns recent entries
+newest-first (`?limit=`, capped at 200, default 50); storage only for now —
+the "memory echo" retrieval described in `docs/design/world-spec.md` #3 is not
+yet built.
+
 ## Database
 
 PostgreSQL, plain SQL migrations in `src/db/migrations/`. Apply with:
@@ -194,11 +259,16 @@ DATABASE_URL=postgres://postgres:kaizi@localhost:5432/kaizi npm run migrate
 
 Tables: `users` (phone-keyed identity, `phone_verified_at`, `welcomed_at`),
 `onboarding_profiles`, `sms_preferences`, `memory_entries` (append-only
-companion memory, seeded by onboarding). Applied migrations are tracked in
-`schema_migrations`.
+companion memory, seeded by onboarding) from `001_init.sql`; `intentions`,
+`chat_messages`, `companion_customization`, `journal_entries` from
+`002_companion_world.sql` (additive, FKs to `users`, never touches an
+onboarding table). Applied migrations are tracked in `schema_migrations`.
 
-The route layer depends only on the `Db` interface (`src/db/types.ts`); tests
-inject an in-memory implementation, so `npm test` needs no database.
+The onboarding route layer depends only on the `Db` interface
+(`src/db/types.ts`); the Companion World route layer depends only on the
+`WorldDb` interface (`src/db/world-types.ts`). Tests inject in-memory
+implementations of both (`test/helpers/memory-db.ts`,
+`src/db/world-memory.ts`), so `npm test` needs no database.
 
 ## Security notes
 

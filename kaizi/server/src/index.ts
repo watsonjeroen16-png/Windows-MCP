@@ -7,6 +7,7 @@ import "dotenv/config";
 import { createApp } from "./app.js";
 import { loadConfig } from "./config.js";
 import { createPgDb } from "./db/index.js";
+import { createPgWorldDb } from "./db/world-pg.js";
 import { createSessionTokenService } from "./services/session-token.js";
 import { createMockSmsService, createRealSmsService, MOCK_APPROVAL_CODE } from "./services/twilio.js";
 
@@ -53,12 +54,14 @@ async function main(): Promise<void> {
     : await createRealSmsService(config.twilio!);
 
   const db = createPgDb(config.databaseUrl);
+  const worldDb = createPgWorldDb(config.databaseUrl);
   const sessionTokens = createSessionTokenService(config.sessionSecret);
 
   const app = createApp({
     db,
     sms,
     sessionTokens,
+    worldDb,
     enforceQuietHours: config.enforceQuietHours,
   });
 
@@ -69,7 +72,7 @@ async function main(): Promise<void> {
   const shutdown = (signal: string): void => {
     console.log(`[kaizi] ${signal} received, shutting down`);
     server.close(() => {
-      db.close()
+      Promise.all([db.close(), worldDb.close()])
         .catch(() => undefined)
         .finally(() => process.exit(0));
     });

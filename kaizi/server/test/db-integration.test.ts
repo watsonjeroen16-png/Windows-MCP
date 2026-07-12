@@ -17,6 +17,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { createApp } from "../src/app.js";
 import { createPgDb } from "../src/db/index.js";
+import { createPgWorldDb } from "../src/db/world-pg.js";
 import { createSessionTokenService } from "../src/services/session-token.js";
 import { createMockSmsService } from "../src/services/twilio.js";
 
@@ -26,6 +27,7 @@ const DATABASE_URL =
 
 describe.skipIf(!RUN)("integration: real Postgres", () => {
   const db = createPgDb(DATABASE_URL);
+  const worldDb = createPgWorldDb(DATABASE_URL);
   const sessionTokens = createSessionTokenService("integration-test-secret");
   const smsLog: string[] = [];
   const sms = createMockSmsService((msg) => smsLog.push(msg));
@@ -33,6 +35,7 @@ describe.skipIf(!RUN)("integration: real Postgres", () => {
     db,
     sms,
     sessionTokens,
+    worldDb,
     logging: false,
     verifyRateLimit: { max: 1000, windowMs: 60_000 },
     verifyPhoneRateLimit: { max: 1000, windowMs: 60_000 },

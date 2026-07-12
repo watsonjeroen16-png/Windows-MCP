@@ -5,9 +5,15 @@ customization, Journey, Reflection. Builds on the approved `world-spec.md` mecha
 the founder-approved v2 mockup. Vocabulary: **"Promise" → "Intention"** throughout, per
 founder decision (2026-07-11).
 
-Status: **planning complete, build queued** — waiting on the Confidence Engineer to finish
-its onboarding hardening pass (still editing `kaizi/server`) before starting backend work
-here, to avoid two agents racing on the same files.
+Status: **backend surface built and wired** (2026-07-11). The Companion World Backend
+Engineer built the migration, `WorldDb` interface, and the four routers below as new files
+while the Confidence Engineer finished its onboarding hardening pass in parallel (per its
+`PENDING_INTEGRATION.md`, to avoid two agents racing on `app.ts`/`index.ts`); those files
+have since been wired in by hand (routers mounted, `WorldDb` constructed in `index.ts`,
+`ANTHROPIC_API_KEY` documented in `.env.example`, per-IP rate limiting added), typechecked,
+and verified end-to-end against real Postgres (migration `002_companion_world.sql` applied
+cleanly after `001_init.sql`). See `kaizi/server/README.md` for the live endpoint contract.
+**Mobile screens are still queued** — nothing in `kaizi/app` consumes this surface yet.
 
 ---
 
@@ -44,31 +50,47 @@ per-message API charge once live, distinct from Twilio's per-SMS cost — worth 
 usage once real users exist. Nothing is blocked without it; mock mode covers all
 development and testing.
 
-## New backend surface (queued, not yet built)
+## New backend surface (built, wired, live)
 
-- `POST /api/chat/message` — send a user message, get the companion's reply. Persists both
-  sides to a new `chat_messages` table (also feeds "memory echo" retrieval per
-  `world-spec.md` #3).
-- `intentions` table + endpoints — daily habit/commitment instances (the renamed
-  "Intentions" mechanic), replacing the onboarding schema's placeholder.
-- `companion_customization` table + endpoints — species/appearance, personality, and
-  environment become editable any time post-onboarding, not locked to the onboarding
-  choice (founder's "more customization" ask).
-- `journal_entries` table — Reflection screen entries, also feeds memory echoes.
-- Extends existing Postgres schema additively (new migration file); does not touch the
-  onboarding tables.
+- `GET /api/chat` / `POST /api/chat` — chat history / send a user message, get the
+  companion's reply. Persists both sides to `chat_messages` (also feeds future "memory
+  echo" retrieval per `world-spec.md` #3 — retrieval itself is not built yet, only storage).
+  (Actual path is `/api/chat`, not the originally-sketched `/api/chat/message`.)
+- `intentions` table + `GET/POST /api/intentions`, `POST /api/intentions/:id/keep` — daily
+  habit/commitment instances (the renamed "Intentions" mechanic), replacing the onboarding
+  schema's placeholder. No XP ledger yet — the client reads `reward_growth` off the
+  returned intention.
+- `companion_customization` table + `GET/PUT /api/customization` — species/appearance,
+  personality, and environment become editable any time post-onboarding, not locked to the
+  onboarding choice (founder's "more customization" ask). Falls back to the onboarding
+  profile's original choice until the user customizes.
+- `journal_entries` table + `GET/POST /api/journal` — Reflection screen entries; storage
+  only for now, memory-echo retrieval not yet built.
+- Extends existing Postgres schema additively (`002_companion_world.sql`); does not touch
+  the onboarding tables. Applied and verified idempotent against real Postgres.
+- All four groups require the same `Authorization: Bearer <token>` session auth as
+  onboarding/sms, and are per-IP rate-limited (30/min default) — `/api/chat` calls the real
+  Claude API per message once live, so it's a real-money abuse vector the same way
+  unbounded `/api/verify/start` is for Twilio.
+- **Known plan gaps** (not blocking this phase, but needed before `world-spec.md` #5/#6 can
+  be built): no server-side "current activity" tracking, no persisted world-state/streak-
+  milestone table. See `kaizi/docs/ep-notes.md`.
 
 ## New app screens (queued, not yet built)
 
 Home (living world, real companion state) · Companion Chat (real AI, replacing the
 mockup's static demo) · Intentions (renamed Promises screen) · Journey · Identity/Profile
 with real customization · Reflection. Visual target: the enhanced garden mockup once the
-Motion Designer's pass is approved.
+Motion Designer's pass is approved. **The backend surface above is ready for these to
+consume** — nothing in `kaizi/app` reaches it yet.
 
 ## Sequencing
 
-1. Confidence Engineer finishes onboarding hardening (in progress).
-2. Motion Designer's enhanced mockup approved by founder (in progress).
-3. Backend: new migration + endpoints above, including the chat integration.
-4. Mobile: new screens wired to the new endpoints, replacing the mockup's demo JS.
-5. QA pass across the expanded app.
+1. ~~Confidence Engineer finishes onboarding hardening.~~ Done.
+2. ~~Motion Designer's enhanced mockup approved by founder.~~ Mockup complete
+   (`kaizi_v2_enhanced.html`); founder approval status not tracked in this doc.
+3. ~~Backend: new migration + endpoints above, including the chat integration.~~ Done, wired,
+   verified against real Postgres.
+4. Mobile: new screens wired to the new endpoints, replacing the mockup's demo JS. **Not
+   started.**
+5. QA pass across the expanded app. **Not started** — depends on step 4.

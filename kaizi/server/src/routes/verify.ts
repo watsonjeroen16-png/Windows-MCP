@@ -33,15 +33,15 @@ export function createVerifyRouter({
     try {
       const { phone } = req.body as { phone: string };
 
+      // Uniform body (no `detail`) on both limiters: an unauthenticated
+      // caller shouldn't learn which of the two phone-rate-limiters fired
+      // (see docs/security-review.md L-4).
       if (!phoneLimiter.allow(phone)) {
-        res.status(429).json({ error: "rate_limited", detail: "too many attempts for this phone" });
+        res.status(429).json({ error: "rate_limited" });
         return;
       }
       if (!dailyPhoneLimiter.allow(phone)) {
-        res.status(429).json({
-          error: "rate_limited",
-          detail: "daily verification limit reached for this phone",
-        });
+        res.status(429).json({ error: "rate_limited" });
         return;
       }
       if (!globalSendBreaker.allow()) {
@@ -68,7 +68,7 @@ export function createVerifyRouter({
       const { phone, code } = req.body as { phone: string; code: string };
 
       if (!phoneLimiter.allow(phone)) {
-        res.status(429).json({ error: "rate_limited", detail: "too many attempts for this phone" });
+        res.status(429).json({ error: "rate_limited" });
         return;
       }
 
@@ -78,13 +78,17 @@ export function createVerifyRouter({
         return;
       }
 
-      const user = await db.upsertVerifiedUser(phone);
+      // `userId` and `mock` are intentionally not returned here: the app
+      // never reads either (see app/src/api/client.ts's verifyCheck, which
+      // only parses `verified`/`token`/`error`), and echoing them to an
+      // unauthenticated caller discloses internal state for no product
+      // benefit (see docs/security-review.md L-4). `db.upsertVerifiedUser`
+      // is still awaited for its side effect (creating/updating the row).
+      await db.upsertVerifiedUser(phone);
       const { token, expiresAt } = sessionTokens.issue(phone);
       res.status(200).json({
         status: "approved",
         verified: true,
-        userId: user.id,
-        mock: result.mock,
         token,
         expiresAt,
       });

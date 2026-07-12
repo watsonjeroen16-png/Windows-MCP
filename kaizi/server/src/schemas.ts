@@ -45,9 +45,12 @@ export const verifyStartSchema = z.object({
   phone: phoneSchema,
 });
 
+// Twilio Verify always issues 6-digit codes (mock mode's fixed approval code
+// is also 6 digits, "000000"); tightened from a 4-8 digit range to shrink
+// the brute-force/validation surface (see docs/security-review.md L-4).
 export const verifyCheckSchema = z.object({
   phone: phoneSchema,
-  code: z.string().trim().regex(/^\d{4,8}$/, "code must be 4-8 digits"),
+  code: z.string().trim().regex(/^\d{6}$/, "code must be 6 digits"),
 });
 
 // Note: profile/welcome no longer take `phone` in the body — the caller's

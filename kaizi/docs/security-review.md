@@ -125,13 +125,19 @@ layered under H-2's auth requirement, so this is defense in depth against a
 caller with a valid token hammering their own endpoints, not the primary
 control.
 
-### M-4. CORS is wide open
+### M-4. CORS is wide open — FIXED
 
-- `kaizi/server/src/app.ts:43` — `app.use(cors())` sends `Access-Control-Allow-Origin: *` on every response.
+- `kaizi/server/src/app.ts:43` — `app.use(cors())` sent `Access-Control-Allow-Origin: *` on every response.
 
-For a native-app API this mostly doesn't matter (native fetch ignores CORS), but it means any website can call these unauthenticated endpoints from a visitor's browser — combining with M-1/M-2/H-2 to let a malicious page use its visitors as distributed callers. It also signals no origin policy exists for a future web client.
+For a native-app API this mostly doesn't matter (native fetch ignores CORS), but it means any website could call these unauthenticated endpoints from a visitor's browser — combining with M-1/M-2/H-2 to let a malicious page use its visitors as distributed callers.
 
-**Recommended fix:** either drop the `cors` middleware entirely (no browser client exists; same-origin default is then enforced by browsers) or pin `origin` to an explicit allowlist driven by env config.
+**Fix applied (2026-07-12, EP pass):** the `cors` middleware and its import were
+removed from `kaizi/server/src/app.ts` entirely — no browser client exists (the
+only client is the native Expo app, and native `fetch` ignores CORS), so the
+header served no purpose. Verified no test asserted on CORS headers before
+removing it. (The `cors` npm dependency itself is left in `package.json`; it's
+still used by the standalone Companion World test harness,
+`test/world/helpers/make-world-app.ts`.)
 
 ### M-5. PII at rest: plaintext phone + duplicated `identity_why`, and no deletion path
 
@@ -145,11 +151,22 @@ The identity answer is sensitive by design ("Because my kids are watching…") a
 
 ## Low
 
-### L-1. Mock SMS service logs full phone numbers and message bodies
+### L-1. Mock SMS service logs full phone numbers and message bodies — FIXED (phone masking)
 
 - `kaizi/server/src/services/twilio.ts:45,50,54` — `verify start for ${phone}`, `SMS to ${to}:\n${body}` (body embeds the identity answer).
 
-Dev-only by design, and H-1's guard now prevents mock mode in production, so this is downgraded to Low. Still, logs outlive intentions. Not auto-fixed because `test/welcome.test.ts:53` asserts the full phone appears in the mock log. **Recommended fix:** mask to last 4 digits (`+*******4567`) in mock log lines and update that one test assertion.
+Dev-only by design, and H-1's guard now prevents mock mode in production, so this is downgraded to Low. Still, logs outlive intentions.
+
+**Fix applied (2026-07-12, EP pass):** added `maskPhone()` (keep the leading
+`+` and last 4 digits, mask the rest — e.g. `+*******4567`) and applied it to
+all three mock-mode log lines in `kaizi/server/src/services/twilio.ts`.
+`test/welcome.test.ts`'s assertion was updated to check for the masked phone
+and assert the full phone no longer appears in the log; server test suite
+still 100% green. **Not addressed:** the SMS body itself (which embeds the
+`identityWhy` answer) is still logged in full in mock mode — masking the body
+would defeat the point of a dev-mode log (verifying the rendered copy), so
+this is left as designed; the message-body-in-logs exposure is bounded to
+dev-only mock mode by the same H-1 production guard.
 
 ### L-2. `trust proxy` is unset — per-IP rate limiting degrades behind a reverse proxy
 
@@ -170,12 +187,20 @@ restart/reset across replicas — a Redis-backed store is the real fix once
 scaling past one process, left as a follow-up since it's a new dependency
 and out of proportion for the current MVP.
 
-### L-4. Verify responses disclose internals (cosmetic)
+### L-4. Verify responses disclose internals (cosmetic) — FIXED
 
-- `kaizi/server/src/routes/verify.ts:24,41` — 429 bodies include `detail: "too many attempts for this phone"`, telling an attacker which of the two limiters fired; `verify.ts:52` echoes `mock: result.mock` and the internal `userId` to an unauthenticated caller.
-- `kaizi/server/src/schemas.ts:50` — codes of 4–8 digits are accepted; Twilio Verify uses 6. Harmless (Twilio rejects others; mock only accepts `000000`) but tightening to `\d{6}` shrinks the surface.
+- `kaizi/server/src/routes/verify.ts:24,41` — 429 bodies included `detail: "too many attempts for this phone"`, telling an attacker which of the two limiters fired; `verify.ts:52` echoed `mock: result.mock` and the internal `userId` to an unauthenticated caller.
+- `kaizi/server/src/schemas.ts:50` — codes of 4–8 digits were accepted; Twilio Verify uses 6.
 
-**Recommended fix:** uniform `{"error":"rate_limited"}` without detail; drop `mock` from client responses; keep `userId` only if the app will use it (it currently doesn't — see `client.ts:98-114`).
+**Fix applied (2026-07-12, EP pass):** both `/api/verify/start` 429 bodies and
+the `/api/verify/check` 429 body now return the uniform
+`{"error":"rate_limited"}` with no `detail`; `/api/verify/check`'s 200
+response no longer includes `userId` or `mock` (confirmed via
+`app/src/api/client.ts`'s `verifyCheck` that neither field is read by the
+app); the code schema in `kaizi/server/src/schemas.ts` was tightened from
+`/^\d{4,8}$/` to `/^\d{6}$/`. Verified no test asserted on any removed field
+before editing (`grep` across `test/*.ts`); `README.md`'s example curl output
+updated to match. Server test suite still 100% green.
 
 ### L-5. App: offline fallback fabricates verification success
 
@@ -208,12 +233,20 @@ Fine for localhost; in production the app would send phone numbers and identity 
 2. [ ] Set `NODE_ENV=production` in the prod process manager so the mock-mode guard (H-1, `index.ts:15-23`) and the new `SESSION_SECRET` guard (H-2, same file) are active; alert on any `TWILIO MOCK MODE` or `SESSION_SECRET not set` log line. Also set a real `SESSION_SECRET` — the auto-generated dev fallback invalidates every session on restart and can't be shared across replicas.
 3. [x] SMS-pumping controls (M-1): per-phone daily cap on `/verify/start` and a global send circuit breaker + logged alert are **done 2026-07-11**. Twilio Fraud Guard on and Geo Permissions restricted to launch countries remain operational (Twilio console) follow-ups, not code changes.
 4. [x] Rate-limit `/api/onboarding` and `/api/sms` (M-3) and remove the enumeration oracle (M-2) — **both done 2026-07-11**, the latter as a free consequence of H-2.
-5. [ ] Pin or remove CORS (M-4).
-6. [ ] Set `app.set("trust proxy", <hops>)` for the real topology and confirm `req.ip` (L-2); move limiter state to Redis if running >1 replica (L-3 — in-process sweep landed 2026-07-11, cross-replica store is still open).
-7. [ ] User deletion path + retention policy for `memory_entries`; encrypted DB storage/backups (M-5).
-8. [ ] Gate the app's offline mock behind `__DEV__` and require an `https` API URL in release builds (L-5, L-6).
-9. [ ] Tighten the code schema to `\d{6}`, drop `mock`/`detail` from client-facing verify responses (L-4); mask phones in mock logs (L-1).
-10. [ ] Confirm `.env` is absent from the repo and CI secrets are injected via the deploy platform, never baked into images.
+5. [x] Pin or remove CORS (M-4). **Done 2026-07-12** — `cors` middleware removed entirely.
+6. [ ] Set `app.set("trust proxy", <hops>)` for the real topology and confirm `req.ip` (L-2); move limiter state to Redis if running >1 replica (L-3 — in-process sweep landed 2026-07-11, cross-replica store is still open). **Accepted limitation for this environment** — the exact hop count depends on the real production LB/proxy topology, which doesn't exist in this dev sandbox; needs to be set at actual deploy time.
+7. [ ] User deletion path + retention policy for `memory_entries`; encrypted DB storage/backups (M-5). **Accepted limitation** — this is a new feature (an admin/internal deletion endpoint plus a retention policy decision), not a bug fix; out of scope for a hardening pass per the project's scope discipline. Left as a recommended follow-up for the founder/lead to prioritize.
+8. [ ] Gate the app's offline mock behind `__DEV__` and require an `https` API URL in release builds (L-5, L-6). **Still open** — not fixed in this pass.
+9. [x] Tighten the code schema to `\d{6}`, drop `mock`/`detail` from client-facing verify responses (L-4); mask phones in mock logs (L-1). **Done 2026-07-12.**
+10. [x] Confirm `.env` is absent from the repo and CI secrets are injected via the deploy platform, never baked into images. **Verified 2026-07-12** — a local `kaizi/server/.env` exists in this dev sandbox but contains no real secrets (just `PORT`/`DATABASE_URL`/`KAIZI_ENFORCE_QUIET_HOURS`, Twilio lines commented out) and is correctly gitignored (`server/.gitignore:3`); the actual "never committed to the real repo, secrets injected at deploy" practice is a CI/deploy-pipeline policy outside this codebase's ability to enforce or verify.
+
+### Resolved 2026-07-12 (EP pass)
+
+M-4 (CORS removed), L-4 (uniform rate-limit body, dropped `mock`/`userId` from
+verify/check, code schema tightened to 6 digits), L-1 (phone masking in mock
+logs). See each finding above for implementation notes; all verified with the
+existing server test suite plus new coverage (`test/world-wiring.test.ts`) and
+a live curl smoke test against real Postgres.
 
 ### Resolved in this pass (2026-07-11, confidence engineering review)
 

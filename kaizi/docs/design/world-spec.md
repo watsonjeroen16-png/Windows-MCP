@@ -79,6 +79,10 @@ proposal #1's no-decay rule. Only forward progress is visualized.
 ---
 
 ## Status
-Spec approved. Engineering build (Expo screens, backend activity/state tracking) not yet
-started — awaiting founder go-ahead. Current active workstream: elevating garden/companion
-animation quality (see Motion & Environment Designer output, `kaizi_v2_enhanced.html`).
+Spec approved. Motion & Environment Designer's animation-quality pass on
+`kaizi_v2_enhanced.html` is complete. Backend surface for Intentions, companion chat,
+customization, and journal is built and wired (see `world-build-plan.md`) — but proposals
+#5 (SMS mirrors the living world) and #6 (streak-driven world states) are not yet
+implementable as specced because the backend doesn't track a "current activity" or a
+persisted world-state/streak-milestone; see `kaizi/docs/ep-notes.md`. Expo screens
+consuming the new backend surface are **not yet started**.
