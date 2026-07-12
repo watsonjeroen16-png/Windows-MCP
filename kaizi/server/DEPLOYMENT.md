@@ -18,12 +18,14 @@ behalf.
 - This repository pushed to a GitHub repo Railway can access (or use the
   Railway CLI to deploy from a local checkout — see §5).
 - Twilio Account SID, Auth Token, a Verify v2 Service SID, and a
-  Messaging-capable phone number (see `kaizi/docs/founder-guide.md` §6 for how
-  to obtain these — same steps, just plug the real values in below instead of
-  a `.env` file).
+  Messaging-capable phone number (see `kaizi/docs/GETTING-CREDENTIALS.md` §2
+  for the beginner-friendly click-by-click steps, or `kaizi/docs/founder-guide.md`
+  §6 for the same steps in the context of local dev — either way, just plug
+  the real values in below instead of a `.env` file).
 - An Anthropic API key from [console.anthropic.com](https://console.anthropic.com)
   (separate from any Claude.ai subscription) if you want live companion chat
-  replies (`/api/chat`) instead of the mock canned-reply pool.
+  replies (`/api/chat`) instead of the mock canned-reply pool — see
+  `kaizi/docs/GETTING-CREDENTIALS.md` §1 for click-by-click steps.
 
 ## 1. Create the Railway project and service
 
@@ -159,7 +161,7 @@ especially the first one:
    # (000000 must NOT work here — if it does, TWILIO_* isn't actually wired
    # and the server silently fell back to mock mode)
    ```
-3. **End-to-end profile + welcome SMS**, using the token from the previous
+5. **End-to-end profile + welcome SMS**, using the token from the previous
    step:
    ```bash
    curl -X POST https://$URL/api/onboarding/profile \
@@ -173,10 +175,10 @@ especially the first one:
    # expect: {"status":"queued", ...} with mock NOT present, and a real
    # companion SMS arrives on the phone.
    ```
-5. **Rate limiting alive:** hammer `/api/verify/start` 6+ times in a minute
+6. **Rate limiting alive:** hammer `/api/verify/start` 6+ times in a minute
    from the same IP and confirm the 6th returns `429 {"error":"rate_limited"}`
    rather than hanging or 500ing.
-6. **Chat, if `ANTHROPIC_API_KEY` is set:** `POST /api/chat` with a valid
+7. **Chat, if `ANTHROPIC_API_KEY` is set:** `POST /api/chat` with a valid
    session token and confirm the reply isn't from the small canned pool (i.e.
    it's clearly a real generated response, not one of the few stock lines).
 

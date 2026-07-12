@@ -62,6 +62,19 @@ export function createApp(options: CreateAppOptions): Express {
   const app = express();
 
   app.disable("x-powered-by");
+  if (process.env.NODE_ENV === "production") {
+    // Railway (and every mainstream PaaS this project's DEPLOYMENT.md
+    // targets) terminates TLS and proxies through exactly one hop before
+    // traffic reaches this process. Without this, express-rate-limit and
+    // PhoneRateLimiter key on the proxy's IP for every request — degrading
+    // the per-IP verify limiter to a single shared global bucket (self-DoS)
+    // — because `req.ip` falls back to the socket address, not
+    // X-Forwarded-For. Trusting exactly 1 hop (not `true`, which would trust
+    // an attacker-supplied X-Forwarded-For with no proxy in front of it) is
+    // the fix docs/security-review.md L-2 recommends. Off in dev/test so
+    // local `req.ip` behavior (and existing rate-limit tests) is unchanged.
+    app.set("trust proxy", 1);
+  }
   app.use(helmet());
   // No `cors()` middleware: Kaizi has no browser client (the app is native
   // Expo, and native fetch ignores CORS entirely), so `Access-Control-Allow-

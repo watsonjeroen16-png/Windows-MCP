@@ -432,6 +432,7 @@ body {
   75% { opacity: var(--fly); transform: translate(8px, -19px); }
 }
 @keyframes lantern-flicker { 0%,100% { transform: scale(1); } 40% { transform: scale(1.22); } 62% { transform: scale(1.08); } }
+@keyframes shake { 0%, 100% { transform: translateX(0); } 20% { transform: translateX(-6px); } 40% { transform: translateX(6px); } 60% { transform: translateX(-4px); } 80% { transform: translateX(4px); } }
 @keyframes dot-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 @keyframes ripple { 0% { transform: scale(0.55); opacity: 0.5; } 100% { transform: scale(1.5); opacity: 0; } }
 @keyframes koiX {
@@ -1635,6 +1636,232 @@ body {
   </div>
 </div>
 
+<!-- ============ ONBOARDING (founder round-3: full clickable Welcome→World arc) ============
+     Order per personalization-spec.md §1.4's approved "New flow": Goals → Why → Quiz(10) →
+     Screen-Time Consent → Companion → Personality → Environment → Phone → Verify → World. -->
+
+<!-- ---- Goals (step 2) ---- -->
+<div class="screen ob-screen" id="screen-ob-goals">
+  <div class="ob-bg">
+    <svg width="375" height="812" viewBox="0 0 375 812" fill="none" style="position:absolute;inset:0;">
+      <rect width="375" height="812" fill="#0E0D0B"/>
+      <ellipse cx="187" cy="720" rx="260" ry="90" fill="#12140F" opacity="0.4"/>
+    </svg>
+    <div class="blossom" style="left:30%; top:0; animation-duration:12s;"></div>
+    <div class="blossom" style="left:68%; top:0; animation-duration:10s; animation-delay:3s;"></div>
+  </div>
+  <div class="ob-status">
+    <div class="ob-back" onclick="go('welcome')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></div>
+    <div class="ob-dots" data-step="2"></div>
+    <div style="width:36px;"></div>
+  </div>
+  <div class="ob-body">
+    <div class="ob-eyebrow">FIRST PROMISE</div>
+    <div class="ob-title">What are you building?</div>
+    <div class="ob-sub">Choose everything that matters to you.</div>
+    <div style="flex:1; display:flex; align-items:center; padding:24px 0;">
+      <div class="ob-chips" id="obGoalChips"></div>
+    </div>
+    <div class="ob-hint" id="obGoalHint"></div>
+  </div>
+  <div class="ob-footer">
+    <div class="ob-cta disabled" id="obGoalsCta" onclick="obGoalsContinue()">Continue</div>
+    <div class="ob-foot-note">You can add more goals later</div>
+  </div>
+</div>
+
+<!-- ---- Why / identity input (step 3) ---- -->
+<div class="screen ob-screen" id="screen-ob-why">
+  <div class="ob-bg"><div style="position:absolute;inset:0;background:#080907;"></div><div class="blossom" style="left:50%; top:0; animation-duration:14s;"></div></div>
+  <div class="ob-status">
+    <div class="ob-back" onclick="go('ob-goals')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></div>
+    <div class="ob-dots" data-step="3"></div>
+    <div style="width:36px;"></div>
+  </div>
+  <div class="ob-body">
+    <div class="ob-eyebrow">YOUR WHY</div>
+    <div class="ob-title">Why are you doing this?</div>
+    <div class="ob-sub">Say it honestly. Your companion will remember.</div>
+    <div style="padding-top:20px;">
+      <textarea class="ob-textarea" id="obWhyInput" maxlength="280" placeholder="Because I'm tired of almost. Because my kids are watching. Because I promised myself…" oninput="obWhyChanged(this.value)"></textarea>
+      <div class="ob-counter" id="obWhyCounter"></div>
+    </div>
+  </div>
+  <div class="ob-footer">
+    <div class="ob-cta disabled" id="obWhyCta" onclick="obWhySave()">Save to memory</div>
+    <div class="ob-foot-note">This becomes the first thing your companion knows about you</div>
+  </div>
+</div>
+
+<!-- ---- Personalization quiz (step 4) — 10 internal cards, one global dot ---- -->
+<div class="screen ob-screen" id="screen-ob-quiz">
+  <div class="ob-bg"><div style="position:absolute;inset:0;background:#0B0A08;"></div></div>
+  <div class="ob-status">
+    <div class="ob-back" onclick="obQuizBack()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></div>
+    <div class="ob-dots" data-step="4"></div>
+    <div id="obSkipQuizWrap" style="width:80px; text-align:right;"><span class="ob-skip-quiz" onclick="skipWholeQuiz()" id="obSkipQuizLink">Skip quiz</span></div>
+  </div>
+  <div class="ob-body">
+    <div class="ob-eyebrow" id="obQuizEyebrow">GETTING TO KNOW YOU</div>
+    <div class="ob-quiz-progress" id="obQuizProgress">1 of 10</div>
+    <div class="ob-quiz-bar"><div class="ob-quiz-bar-fill" id="obQuizBarFill" style="width:10%;"></div></div>
+    <div class="ob-title" id="obQuizTitle" style="margin-top:14px;">—</div>
+    <div class="ob-sub" id="obQuizSub" style="display:none;"></div>
+    <div style="padding-top:22px;">
+      <div class="ob-chips" id="obQuizChips"></div>
+    </div>
+    <div class="ob-skip" id="obQuizSkipQ" onclick="skipQuizQuestion()">Skip this question</div>
+    <div id="obQuizDone" style="display:none; text-align:center; padding-top:60px; font-family:var(--serif); font-style:italic; font-size:16px; color:var(--sand);">"Got it — that helps."</div>
+  </div>
+  <div class="ob-footer">
+    <div class="ob-cta disabled" id="obQuizCta" onclick="obQuizContinueMulti()" style="display:none;">Continue</div>
+  </div>
+</div>
+
+<!-- ---- Screen-time consent (step 5) ---- -->
+<div class="screen ob-screen" id="screen-ob-screentime">
+  <div class="ob-bg"><div style="position:absolute;inset:0;background:#0E0D0B;"></div><div class="blossom" style="left:14%; top:0; animation-duration:13s;"></div></div>
+  <div class="ob-status">
+    <div class="ob-back" onclick="obBackToQuiz()"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></div>
+    <div class="ob-dots" data-step="5"></div>
+    <div style="width:36px;"></div>
+  </div>
+  <div class="ob-body">
+    <div class="ob-eyebrow">ONE MORE THING — OPTIONAL</div>
+    <div class="ob-title">Let your companion notice your screen time?</div>
+    <div class="ob-sub">This helps them shape your daily intentions around real patterns — not guesses.</div>
+    <div class="ob-consent-body">"If you say yes, Kaizi reads your phone's built-in screen-time totals — how much time you spend in which apps, nothing else. We never see message content, browsing history, contacts, photos, or your location. You can turn this off any time in Settings, and nothing about your companion changes if you skip it."</div>
+    <div class="ob-toggle-row">
+      <div>
+        <div class="ob-toggle-label">Share screen time</div>
+        <div class="ob-toggle-sub">App usage totals only — nothing else</div>
+      </div>
+      <div class="ob-toggle" id="obScreenTimeToggle" onclick="obToggleScreenTime()"><div class="ob-knob"></div></div>
+    </div>
+    <div class="ob-android-note" id="obAndroidNote" style="display:none;">This opens your phone's Usage Access settings — find Kaizi in the list and turn it on, then come back here.</div>
+  </div>
+  <div class="ob-footer">
+    <div class="ob-cta" onclick="go('ob-companion')">Continue</div>
+    <div class="ob-foot-note">Your companion works great either way — this just makes it a little sharper.</div>
+  </div>
+</div>
+
+<!-- ---- Companion selection (step 6) ---- -->
+<div class="screen ob-screen" id="screen-ob-companion">
+  <div class="ob-bg"><div style="position:absolute;inset:0;background:#0E0D0B;"></div></div>
+  <div class="ob-status">
+    <div class="ob-back" onclick="go('ob-screentime')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></div>
+    <div class="ob-dots" data-step="6"></div>
+    <div style="width:36px;"></div>
+  </div>
+  <div class="ob-body" style="padding-bottom:8px;">
+    <div class="ob-eyebrow">YOUR COMPANION</div>
+    <div class="ob-title">Who walks with you?</div>
+    <div class="ob-sub">They'll grow as you do.</div>
+    <div class="ob-grid2" id="obCompanionGrid" style="margin-top:6px;"></div>
+  </div>
+  <div class="ob-footer">
+    <div class="ob-cta disabled" id="obCompanionCta" onclick="obCompanionContinue()">Continue</div>
+  </div>
+</div>
+
+<!-- ---- Personality selection (step 7) ---- -->
+<div class="screen ob-screen" id="screen-ob-personality">
+  <div class="ob-bg"><div style="position:absolute;inset:0;background:#0B0A08;"></div></div>
+  <div class="ob-status">
+    <div class="ob-back" onclick="go('ob-companion')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></div>
+    <div class="ob-dots" data-step="7"></div>
+    <div style="width:36px;"></div>
+  </div>
+  <div class="ob-body">
+    <div class="ob-eyebrow">THEIR VOICE</div>
+    <div class="ob-title">How should they speak to you?</div>
+    <div class="ob-sub">Hear each one. Choose the voice you'll listen to.</div>
+    <div class="ob-plist" id="obPersonalityList"></div>
+  </div>
+  <div class="ob-footer">
+    <div class="ob-cta disabled" id="obPersonalityCta" onclick="obPersonalityContinue()">Continue</div>
+  </div>
+</div>
+
+<!-- ---- Environment selection (step 8) ---- -->
+<div class="screen ob-screen" id="screen-ob-environment">
+  <div class="ob-bg"><div style="position:absolute;inset:0;background:#0E0D0B;"></div></div>
+  <div class="ob-status">
+    <div class="ob-back" onclick="go('ob-personality')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></div>
+    <div class="ob-dots" data-step="8"></div>
+    <div style="width:36px;"></div>
+  </div>
+  <div class="ob-body" style="padding-bottom:8px;">
+    <div class="ob-eyebrow">YOUR WORLD</div>
+    <div class="ob-title">Choose your world</div>
+    <div class="ob-sub">Where your companion lives — and where you'll meet.</div>
+    <div class="ob-grid3" id="obEnvGrid" style="margin-top:6px;"></div>
+  </div>
+  <div class="ob-footer">
+    <div class="ob-cta disabled" id="obEnvCta" onclick="obEnvContinue()">Continue</div>
+  </div>
+</div>
+
+<!-- ---- Phone + SMS preferences (step 9a) ---- -->
+<div class="screen ob-screen" id="screen-ob-phone">
+  <div class="ob-bg"><div style="position:absolute;inset:0;background:#0E0D0B;"></div><div class="blossom" style="left:80%; top:0; animation-duration:11s;"></div></div>
+  <div class="ob-status">
+    <div class="ob-back" onclick="go('ob-environment')"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></div>
+    <div class="ob-dots" data-step="9"></div>
+    <div style="width:36px;"></div>
+  </div>
+  <div class="ob-body">
+    <div class="ob-eyebrow">STAY CONNECTED</div>
+    <div class="ob-title">One last promise</div>
+    <div class="ob-sub">Your companion checks in by text. No email, no spam — just them.</div>
+    <div class="ob-phone-field">
+      <span class="ob-phone-cc">🇺🇸 +1</span>
+      <span class="ob-phone-div"></span>
+      <input class="ob-phone-input" id="obPhoneInput" type="tel" inputmode="tel" placeholder="(555) 123-4567" oninput="obPhoneChanged(this.value)"/>
+    </div>
+    <div class="ob-toggle-row">
+      <div><div class="ob-toggle-label">Morning plan</div><div class="ob-toggle-sub">A text to start your day with intention</div></div>
+      <div class="ob-toggle on" id="obToggleMorning" onclick="obTogglePref('morning')"><div class="ob-knob"></div></div>
+    </div>
+    <div class="ob-toggle-row">
+      <div><div class="ob-toggle-label">Evening check-in</div><div class="ob-toggle-sub">A moment to close the day honestly</div></div>
+      <div class="ob-toggle on" id="obToggleEvening" onclick="obTogglePref('evening')"><div class="ob-knob"></div></div>
+    </div>
+  </div>
+  <div class="ob-footer">
+    <div class="ob-cta disabled" id="obPhoneCta" onclick="obSendCode()">Send code</div>
+    <div class="ob-foot-note">Your number is used only for your companion's messages. Never shared.</div>
+  </div>
+</div>
+
+<!-- ---- SMS verification (step 9b) ---- -->
+<div class="screen ob-screen" id="screen-ob-verify">
+  <div class="ob-bg"><div style="position:absolute;inset:0;background:#0E0D0B;"></div></div>
+  <div class="ob-status">
+    <div class="ob-back" onclick="go('ob-phone')" id="obVerifyBack"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg></div>
+    <div class="ob-dots" data-step="9"></div>
+    <div style="width:36px;"></div>
+  </div>
+  <div class="ob-body" id="obVerifyBody">
+    <div class="ob-eyebrow">VERIFY</div>
+    <div class="ob-title">Enter the code</div>
+    <div class="ob-sub">Sent to <span id="obVerifyPhone">your number</span> · mock code is 000000</div>
+    <div class="ob-code-row" id="obCodeRow"></div>
+    <input id="obCodeInput" type="tel" inputmode="numeric" maxlength="6" placeholder="000000"
+      style="margin-top:16px; width:100%; text-align:center; letter-spacing:0.5em; background:rgba(255,255,255,0.05); border:0.5px solid rgba(255,255,255,0.12); border-radius:999px; padding:12px; font-family:var(--serif); font-size:16px; color:var(--cream); outline:none;"
+      oninput="obCodeChanged(this.value)"/>
+    <div class="ob-verify-status" id="obVerifyStatus">Didn't get it? <span style="color:var(--gold); text-decoration:underline; cursor:pointer;" onclick="obResendCode()">Resend code</span></div>
+
+    <!-- handoff confirmation — replaces the code entry in-place on success, then hands off to World -->
+    <div class="ob-handoff" id="obHandoff" style="display:none;">
+      <div class="ob-avatar" id="obHandoffAvatar" style="width:80px; height:88px; margin:0 auto;"></div>
+      <div class="ob-title" style="font-size:20px; margin-top:14px;" id="obHandoffTitle">Your companion is on their way</div>
+      <div class="ob-hbubble" id="obHandoffLine">"I'll text you shortly. When I do — answer honestly."</div>
+    </div>
+  </div>
+</div>
+
 <!-- ============ YOU ============ -->
 <div class="screen" id="screen-identity">
   <div style="position:absolute;inset:0;background:#0B0A08;"></div>
@@ -2513,6 +2740,364 @@ function forceIdleSpeech() {
    controls scrub backward to preview earlier milestones. */
 setStreakDay(94);
 lastMilestoneLabel = null; // don't let initial setup itself queue an idle-speech line
+
+/* =========================================================================
+   ONBOARDING FLOW (founder round-3): Welcome → Goals → Why → Quiz(10) →
+   Screen-Time Consent → Companion → Personality → Environment → Phone →
+   Verify → World. All state lives in obState; every list screen is rendered
+   from a small data array (index-based click handlers only — no option text
+   is ever interpolated into an inline onclick string, so nothing here is at
+   risk of breaking on an apostrophe). ========================================================================= */
+
+const obState = {
+  goals: [],
+  why: '',
+  quiz: {},
+  quizSkipped: false,
+  screenTime: false,
+  companion: null,
+  personality: null,
+  environment: null,
+  phone: '',
+  smsPrefs: { morning: true, evening: true },
+};
+
+function renderObDots() {
+  document.querySelectorAll('.ob-dots[data-step]').forEach(el => {
+    const step = parseInt(el.dataset.step, 10);
+    let html = '';
+    for (let i = 2; i <= 9; i++) {
+      const cls = i === step ? ' current' : (i < step ? ' done' : '');
+      html += `<div class="ob-dot${cls}"></div>`;
+    }
+    el.innerHTML = html;
+  });
+}
+
+/* ---------- Goals (step 2) ---------- */
+const GOAL_OPTIONS = ['Fitness', 'Skin', 'Business', 'Discipline', 'Learning'];
+function renderGoalChips() {
+  document.getElementById('obGoalChips').innerHTML = GOAL_OPTIONS.map(g =>
+    `<div class="ob-chip${obState.goals.includes(g) ? ' selected' : ''}" onclick="toggleGoalChip('${g}')">${g}</div>`
+  ).join('');
+  document.getElementById('obGoalHint').textContent = obState.goals.length ? obState.goals.length + ' selected' : '';
+}
+function toggleGoalChip(g) {
+  const i = obState.goals.indexOf(g);
+  if (i === -1) obState.goals.push(g); else obState.goals.splice(i, 1);
+  renderGoalChips();
+  document.getElementById('obGoalsCta').classList.toggle('disabled', obState.goals.length === 0);
+}
+function obGoalsContinue() {
+  if (!obState.goals.length) return;
+  go('ob-why');
+}
+
+/* ---------- Why (step 3) ---------- */
+function obWhyChanged(v) {
+  obState.why = v;
+  document.getElementById('obWhyCounter').textContent = v.length + '/280';
+  document.getElementById('obWhyCta').classList.toggle('disabled', v.trim().length < 10);
+}
+function obWhySave() {
+  if (obState.why.trim().length < 10) return;
+  const cta = document.getElementById('obWhyCta');
+  cta.textContent = 'Remembered';
+  setTimeout(() => {
+    cta.textContent = 'Save to memory';
+    quizIdx = 0;
+    renderQuizCard();
+    go('ob-quiz');
+  }, 550);
+}
+
+/* ---------- Quiz (step 4, 10 internal cards — personalization-spec.md §1) ---------- */
+const QUIZ = [
+  { key: 'focusGoal', eyebrow: 'GETTING TO KNOW YOU', title: "Of what you're building, what matters most right now?", dynamicFromGoals: true, multi: false },
+  { key: 'startingPoint', eyebrow: 'YOUR STARTING LINE', title: 'Where are you starting from?', options: ['Just starting out', 'Restarting after a break', 'Consistent, want to level up', 'Already disciplined, refining the details'], multi: false },
+  { key: 'obstacle', eyebrow: 'BE HONEST', title: 'What gets in your way most?', options: ['Motivation dips', 'Not enough time', "Don't know where to start", 'Distractions — phone, social media', 'Self-doubt', 'Inconsistency'], multi: false },
+  { key: 'supportStyle', eyebrow: 'HOW WE PUSH', title: "When you're behind, how do you want to hear it?", sub: "This is about how hard we push — you'll pick their voice next.", options: ['A gentle nudge', 'Direct — no sugar-coating', 'Celebrate the wins, skip the guilt', "Mostly hands-off — I'll ask when I need it"], multi: false },
+  { key: 'availability', eyebrow: 'YOUR SCHEDULE', title: 'When are you usually free to focus?', options: ['Early morning', 'Midday', 'Evening', 'Late night', 'It varies day to day'], multi: true },
+  { key: 'motivationStyle', eyebrow: 'WHAT DRIVES YOU', title: 'What actually keeps you going?', options: ['Discipline & routine', 'Progress I can see', 'Someone in my corner', 'A little competition'], multi: false },
+  { key: 'pastAttempts', eyebrow: 'NO JUDGMENT', title: 'Have you tried something like this before?', options: ['Never really tried', "Tried apps or trackers, didn't stick", 'Tried with a person — coach, friend — and it helped', "I know what works, I just don't do it"], multi: false },
+  { key: 'confidence', eyebrow: 'BE HONEST, AGAIN', title: 'How confident do you feel about actually sticking with this?', options: ['Not very', 'Somewhat', 'Fairly', 'Very'], multi: false },
+  { key: 'rhythm', eyebrow: 'YOUR RHYTHM', title: "What's your natural rhythm?", options: ['Same routine daily', 'Flexible, different every day', 'Structured weekdays, loose weekends'], multi: false },
+  { key: 'ninetyDayVision', eyebrow: 'LOOKING AHEAD', title: 'In 90 days, what would feel like a real win?', options: ["A streak I'm proud of", 'A result I can measure', 'Feeling back in control', 'Proof I can follow through'], multi: false },
+];
+let quizIdx = 0;
+function currentQuizQuestion() {
+  const q = QUIZ[quizIdx];
+  if (q.dynamicFromGoals) {
+    const opts = obState.goals.slice().concat(['All of it, equally']);
+    return Object.assign({}, q, { options: opts });
+  }
+  return q;
+}
+function renderQuizCard() {
+  const q = currentQuizQuestion();
+  document.getElementById('obQuizEyebrow').textContent = q.eyebrow;
+  document.getElementById('obQuizTitle').textContent = q.title;
+  const subEl = document.getElementById('obQuizSub');
+  if (q.sub) { subEl.textContent = q.sub; subEl.style.display = 'block'; } else { subEl.style.display = 'none'; }
+  document.getElementById('obQuizProgress').textContent = (quizIdx + 1) + ' of ' + QUIZ.length;
+  document.getElementById('obQuizBarFill').style.width = (((quizIdx + 1) / QUIZ.length) * 100) + '%';
+  document.getElementById('obSkipQuizWrap').style.visibility = quizIdx === 0 ? 'visible' : 'hidden';
+  const selected = obState.quiz[q.key];
+  const chipsEl = document.getElementById('obQuizChips');
+  chipsEl.style.display = 'flex';
+  chipsEl.innerHTML = q.options.map((o, idx) => {
+    const isSel = q.multi ? (Array.isArray(selected) && selected.includes(o)) : selected === o;
+    return `<div class="ob-chip${isSel ? ' selected' : ''}" onclick="quizChipClick(${idx})">${escapeHtml(o)}</div>`;
+  }).join('');
+  const cta = document.getElementById('obQuizCta');
+  if (q.multi) {
+    cta.style.display = 'block';
+    cta.classList.toggle('disabled', !(Array.isArray(selected) && selected.length));
+  } else {
+    cta.style.display = 'none';
+  }
+  document.getElementById('obQuizDone').style.display = 'none';
+  document.getElementById('obQuizSkipQ').style.display = 'block';
+}
+function quizChipClick(optIdx) {
+  const q = currentQuizQuestion();
+  const o = q.options[optIdx];
+  if (q.multi) {
+    if (!Array.isArray(obState.quiz[q.key])) obState.quiz[q.key] = [];
+    const arr = obState.quiz[q.key];
+    const i = arr.indexOf(o);
+    if (i === -1) arr.push(o); else arr.splice(i, 1);
+    renderQuizCard();
+  } else {
+    obState.quiz[q.key] = o;
+    renderQuizCard();
+    setTimeout(advanceQuiz, 350);
+  }
+}
+function advanceQuiz() {
+  quizIdx++;
+  if (quizIdx >= QUIZ.length) { finishQuiz(); return; }
+  renderQuizCard();
+}
+function obQuizContinueMulti() {
+  const q = currentQuizQuestion();
+  const selected = obState.quiz[q.key];
+  if (!(Array.isArray(selected) && selected.length)) return;
+  advanceQuiz();
+}
+function obQuizBack() {
+  if (quizIdx > 0) { quizIdx--; renderQuizCard(); } else { go('ob-why'); }
+}
+function skipQuizQuestion() { advanceQuiz(); }
+function skipWholeQuiz() {
+  obState.quizSkipped = true;
+  go('ob-screentime');
+}
+function finishQuiz() {
+  document.getElementById('obQuizChips').style.display = 'none';
+  document.getElementById('obQuizSkipQ').style.display = 'none';
+  document.getElementById('obQuizCta').style.display = 'none';
+  document.getElementById('obQuizDone').style.display = 'block';
+  setTimeout(() => { go('ob-screentime'); }, 900);
+}
+function obBackToQuiz() {
+  quizIdx = Math.max(0, QUIZ.length - 1);
+  renderQuizCard();
+  go('ob-quiz');
+}
+
+/* ---------- Screen-time consent (step 5 — personalization-spec.md §2) ---------- */
+function obToggleScreenTime() {
+  obState.screenTime = !obState.screenTime;
+  document.getElementById('obScreenTimeToggle').classList.toggle('on', obState.screenTime);
+  document.getElementById('obAndroidNote').style.display = obState.screenTime ? 'block' : 'none';
+}
+
+/* ---------- Companion (step 6) — 7 SVG minis, hand-drawn-primitive style
+   matching onboarding-spec.md's shape descriptions, small enough not to
+   need the full per-species idle-motion rig this mockup's world companion
+   has. ---------- */
+const COMPANIONS = [
+  { id: 'wolfPup', name: 'Wolf Pup', trait: 'LOYAL', svg: '<svg viewBox="0 0 100 110"><ellipse cx="50" cy="100" rx="30" ry="6" fill="rgba(0,0,0,0.25)"/><path d="M28 46 L20 22 L38 40 Z" fill="#3A4048"/><path d="M72 46 L80 22 L62 40 Z" fill="#3A4048"/><path d="M28 44 L24 30 L36 40 Z" fill="#C8B89A"/><path d="M72 44 L76 30 L64 40 Z" fill="#C8B89A"/><ellipse cx="50" cy="58" rx="24" ry="22" fill="#454C55"/><ellipse cx="50" cy="70" rx="13" ry="10" fill="#C8CCD2"/><circle cx="42" cy="54" r="2.4" fill="#1A1A22"/><circle cx="58" cy="54" r="2.4" fill="#1A1A22"/><circle cx="50" cy="66" r="2" fill="#20242A"/></svg>' },
+  { id: 'fox', name: 'Fox', trait: 'CLEVER', svg: '<svg viewBox="0 0 100 110"><ellipse cx="50" cy="100" rx="30" ry="6" fill="rgba(0,0,0,0.25)"/><path d="M30 44 L20 20 L40 38 Z" fill="#B8622E"/><path d="M70 44 L80 20 L60 38 Z" fill="#B8622E"/><ellipse cx="50" cy="60" rx="25" ry="24" fill="#B8622E"/><path d="M50 62 L36 76 L64 76 Z" fill="#F0EBE0" opacity="0.9"/><circle cx="41" cy="56" r="2" fill="#1A1A22"/><circle cx="59" cy="56" r="2" fill="#1A1A22"/><circle cx="50" cy="66" r="1.8" fill="#20242A"/></svg>' },
+  { id: 'lion', name: 'Lion', trait: 'BOLD', svg: '<svg viewBox="0 0 100 110"><ellipse cx="50" cy="100" rx="32" ry="6" fill="rgba(0,0,0,0.25)"/><g fill="#8A5A20" opacity="0.9"><ellipse cx="50" cy="35" rx="15" ry="12"/><ellipse cx="30" cy="45" rx="14" ry="11"/><ellipse cx="70" cy="45" rx="14" ry="11"/><ellipse cx="25" cy="65" rx="13" ry="11"/><ellipse cx="75" cy="65" rx="13" ry="11"/><ellipse cx="35" cy="80" rx="13" ry="11"/><ellipse cx="65" cy="80" rx="13" ry="11"/><ellipse cx="50" cy="85" rx="14" ry="11"/></g><circle cx="50" cy="62" r="24" fill="#C99C46"/><ellipse cx="50" cy="72" rx="11" ry="8" fill="#E0C888"/><circle cx="42" cy="58" r="2.2" fill="#1A1A22"/><circle cx="58" cy="58" r="2.2" fill="#1A1A22"/><circle cx="50" cy="68" r="1.8" fill="#3A2818"/></svg>' },
+  { id: 'dog', name: 'Dog', trait: 'STEADY', svg: '<svg viewBox="0 0 100 110"><ellipse cx="50" cy="100" rx="30" ry="6" fill="rgba(0,0,0,0.25)"/><rect x="18" y="38" width="16" height="34" rx="8" fill="#8A6844"/><rect x="66" y="38" width="16" height="34" rx="8" fill="#8A6844"/><circle cx="50" cy="58" r="25" fill="#9A7852"/><rect x="34" y="76" width="32" height="8" rx="4" fill="#D4A853" opacity="0.85"/><ellipse cx="50" cy="72" rx="6" ry="8" fill="rgba(230,150,150,0.8)"/><circle cx="41" cy="54" r="2.2" fill="#1A1A22"/><circle cx="59" cy="54" r="2.2" fill="#1A1A22"/><ellipse cx="50" cy="64" rx="4" ry="3" fill="#2A2018"/></svg>' },
+  { id: 'humanMale', name: 'Human — Male', trait: 'GROUNDED', svg: '<svg viewBox="0 0 100 110"><ellipse cx="50" cy="100" rx="34" ry="7" fill="rgba(0,0,0,0.25)"/><path d="M50 46 C30 50 25 76 24 100 L76 100 C75 76 70 50 50 46 Z" fill="#37472F"/><rect x="30" y="78" width="40" height="6" rx="3" fill="#C9A25A" opacity="0.85"/><ellipse cx="50" cy="28" rx="20" ry="21" fill="#D9B48F"/><path d="M30 29 C28.5 12 37 2 50 2 C63 2 71.5 12 70 29 C66 19 59 15.5 50 15.5 C41 15.5 34 19 30 29 Z" fill="#3B2A18"/><circle cx="50" cy="2" r="6" fill="#3B2A18"/><circle cx="43" cy="33" r="2.4" fill="#2A2018"/><circle cx="57" cy="33" r="2.4" fill="#2A2018"/><path d="M45 42 Q50 45 55 42" stroke="#8B6A50" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>' },
+  { id: 'humanFemale', name: 'Human — Female', trait: 'GRACEFUL', svg: '<svg viewBox="0 0 100 110"><ellipse cx="50" cy="100" rx="34" ry="7" fill="rgba(0,0,0,0.25)"/><path d="M50 46 C30 50 25 76 24 100 L76 100 C75 76 70 50 50 46 Z" fill="#3A2A35"/><rect x="30" y="78" width="40" height="6" rx="3" fill="#C9A25A" opacity="0.85"/><rect x="26" y="30" width="6" height="30" rx="3" fill="#3B2A18"/><rect x="68" y="30" width="6" height="30" rx="3" fill="#3B2A18"/><ellipse cx="50" cy="28" rx="20" ry="21" fill="#D9B48F"/><path d="M30 29 C28.5 12 37 2 50 2 C63 2 71.5 12 70 29 C66 19 59 15.5 50 15.5 C41 15.5 34 19 30 29 Z" fill="#3B2A18"/><circle cx="50" cy="2" r="6" fill="#3B2A18"/><circle cx="43" cy="33" r="2.4" fill="#2A2018"/><circle cx="57" cy="33" r="2.4" fill="#2A2018"/><path d="M45 42 Q50 45 55 42" stroke="#8B6A50" stroke-width="1.5" fill="none" stroke-linecap="round"/><circle cx="66" cy="22" r="2.2" fill="rgba(226,168,180,0.85)"/></svg>' },
+  { id: 'dragonkin', name: 'Dragonkin', trait: 'FIERCE', svg: '<svg viewBox="0 0 100 110"><ellipse cx="50" cy="100" rx="30" ry="6" fill="rgba(0,0,0,0.25)"/><path d="M20 56 L8 40 L26 46 Z" fill="rgba(42,90,85,0.6)"/><path d="M80 56 L92 40 L74 46 Z" fill="rgba(42,90,85,0.6)"/><path d="M38 30 Q34 14 42 4" stroke="#C8B89A" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M62 30 Q66 14 58 4" stroke="#C8B89A" stroke-width="3" fill="none" stroke-linecap="round"/><ellipse cx="50" cy="62" rx="24" ry="26" fill="#2A5A55"/><path d="M40 60 L45 54 L50 60 L55 54 L60 60" stroke="#1C3E3A" stroke-width="2" fill="none"/><circle cx="42" cy="58" r="2" fill="#D4A853"/><circle cx="58" cy="58" r="2" fill="#D4A853"/><circle cx="30" cy="70" r="1.4" fill="rgba(212,168,83,0.7)"/><circle cx="72" cy="66" r="1.2" fill="rgba(212,168,83,0.6)"/></svg>' },
+];
+function renderCompanionGrid() {
+  document.getElementById('obCompanionGrid').innerHTML = COMPANIONS.map((c, idx) => `
+    <div class="ob-companion-card${obState.companion === c.id ? ' selected' : ''}" onclick="selectCompanion(${idx})">
+      <div class="ob-avatar">${c.svg}</div>
+      <div class="ob-companion-name">${c.name}</div>
+      <div class="ob-companion-trait">${c.trait}</div>
+    </div>`).join('');
+}
+function selectCompanion(idx) {
+  obState.companion = COMPANIONS[idx].id;
+  renderCompanionGrid();
+  document.getElementById('obCompanionCta').classList.remove('disabled');
+}
+function obCompanionContinue() {
+  if (!obState.companion) return;
+  go('ob-personality');
+}
+
+/* ---------- Personality (step 7) — canonical sample lines, onboarding-spec.md Screen 5 ---------- */
+const PERSONALITIES = [
+  { id: 'coach', name: 'Coach', tag: 'DRIVEN', line: '"We\'ve got a plan and today is step one — let\'s get to work."' },
+  { id: 'toughLove', name: 'Tough Love', tag: 'UNFILTERED', line: '"Nobody is coming to save you. Show me what you\'ve got."' },
+  { id: 'mentor', name: 'Mentor', tag: 'WISE', line: '"Every master was once a beginner who refused to quit."' },
+  { id: 'supportive', name: 'Supportive', tag: 'WARM', line: '"I\'m proud of you for showing up today. We\'ll take it one step at a time, together."' },
+  { id: 'rival', name: 'Rival', tag: 'COMPETITIVE', line: '"I\'ve already finished my training today. Your move."' },
+];
+function renderPersonalityList() {
+  document.getElementById('obPersonalityList').innerHTML = PERSONALITIES.map((p, idx) => `
+    <div class="ob-pcard${obState.personality === p.id ? ' selected' : ''}" onclick="selectPersonality(${idx})">
+      <div class="ob-pcard-row"><div class="ob-pcard-name">${p.name}</div><div class="ob-pcard-tag">${p.tag}</div></div>
+      <div class="ob-pcard-bubble">${p.line}</div>
+    </div>`).join('');
+}
+function selectPersonality(idx) {
+  obState.personality = PERSONALITIES[idx].id;
+  renderPersonalityList();
+  document.getElementById('obPersonalityCta').classList.remove('disabled');
+}
+function obPersonalityContinue() {
+  if (!obState.personality) return;
+  go('ob-environment');
+}
+
+/* ---------- Environment (step 8) — 12 tiles, onboarding-spec.md Screen 6 ---------- */
+const ENV_TILES = [
+  { id: 'cyberCity', label: 'Cyber City', grad: ['#0A0E1A', '#16204A', '#2A1A4A'] },
+  { id: 'modernApartment', label: 'Modern Apartment', grad: ['#141210', '#241E16', '#3A2E1E'] },
+  { id: 'forestVillage', label: 'Forest Village', grad: ['#0A140C', '#14261A', '#1E3820'] },
+  { id: 'mountainRetreat', label: 'Mountain Retreat', grad: ['#0C1016', '#1A2430', '#2E3A46'] },
+  { id: 'dojo', label: 'Dojo', grad: ['#160F0A', '#2A1A10', '#3A2416'] },
+  { id: 'coastalParadise', label: 'Coastal Paradise', grad: ['#081420', '#0E2A3A', '#1A4A50'] },
+  { id: 'fantasyKingdom', label: 'Fantasy Kingdom', grad: ['#100A1E', '#241440', '#3A2060'] },
+  { id: 'spaceColony', label: 'Space Colony', grad: ['#05060C', '#0C1024', '#1A1A3A'] },
+  { id: 'japaneseGarden', label: 'Japanese Garden', grad: ['#090C0A', '#0F1A12', '#14261A'], begin: true },
+  { id: 'trainingCampus', label: 'Training Campus', grad: ['#0C0E10', '#1C2226', '#2E3A34'] },
+  { id: 'entrepreneurDistrict', label: 'Entrepreneur District', grad: ['#0E0C08', '#201A10', '#36281A'] },
+  { id: 'skyIslands', label: 'Sky Islands', grad: ['#0A0F1C', '#16283E', '#2A4A5E'] },
+];
+function renderEnvGrid() {
+  document.getElementById('obEnvGrid').innerHTML = ENV_TILES.map((e, idx) => {
+    const bg = `linear-gradient(180deg, ${e.grad[0]} 0%, ${e.grad[1]} 55%, ${e.grad[2]} 100%)`;
+    return `<div class="ob-env-tile${obState.environment === e.id ? ' selected' : ''}" style="background:${bg};" onclick="selectEnv(${idx})">
+      <div class="ob-env-scrim"></div>
+      ${e.begin ? '<div class="ob-env-begin">BEGIN HERE</div>' : ''}
+      <div class="ob-env-label">${e.label}</div>
+    </div>`;
+  }).join('');
+}
+function selectEnv(idx) {
+  obState.environment = ENV_TILES[idx].id;
+  renderEnvGrid();
+  document.getElementById('obEnvCta').classList.remove('disabled');
+}
+function obEnvContinue() {
+  if (!obState.environment) return;
+  go('ob-phone');
+}
+
+/* ---------- Phone + SMS prefs (step 9a) ---------- */
+function obPhoneChanged(v) {
+  obState.phone = v;
+  const digits = v.replace(/\D/g, '');
+  document.getElementById('obPhoneCta').classList.toggle('disabled', digits.length < 7);
+}
+function obTogglePref(key) {
+  obState.smsPrefs[key] = !obState.smsPrefs[key];
+  const el = document.getElementById(key === 'morning' ? 'obToggleMorning' : 'obToggleEvening');
+  el.classList.toggle('on', obState.smsPrefs[key]);
+}
+function obSendCode() {
+  const digits = obState.phone.replace(/\D/g, '');
+  if (digits.length < 7) return;
+  document.getElementById('obVerifyPhone').textContent = '+1 ' + obState.phone;
+  codeDigits = '';
+  const input = document.getElementById('obCodeInput');
+  input.value = '';
+  input.style.display = 'block';
+  renderCodeBoxes();
+  document.getElementById('obCodeRow').style.display = 'flex';
+  const status = document.getElementById('obVerifyStatus');
+  status.classList.remove('ok');
+  status.style.color = '';
+  status.style.display = 'block';
+  status.innerHTML = 'Didn\'t get it? <span style="color:var(--gold); text-decoration:underline; cursor:pointer;" onclick="obResendCode()">Resend code</span>';
+  document.getElementById('obHandoff').style.display = 'none';
+  document.getElementById('obVerifyBack').style.visibility = 'visible';
+  go('ob-verify');
+  setTimeout(() => input.focus(), 400);
+}
+
+/* ---------- SMS verification (step 9b) — mock code 000000, matches the real backend's mock mode ---------- */
+let codeDigits = '';
+function renderCodeBoxes() {
+  const row = document.getElementById('obCodeRow');
+  let html = '';
+  for (let i = 0; i < 6; i++) {
+    const d = codeDigits[i] || '';
+    html += `<div class="ob-code-box${d ? ' filled' : ''}">${d}</div>`;
+  }
+  row.innerHTML = html;
+}
+function obCodeChanged(v) {
+  codeDigits = v.replace(/\D/g, '').slice(0, 6);
+  const input = document.getElementById('obCodeInput');
+  if (input.value !== codeDigits) input.value = codeDigits;
+  renderCodeBoxes();
+  if (codeDigits.length === 6) {
+    if (codeDigits === '000000') obVerifySuccess();
+    else obVerifyError();
+  }
+}
+function obVerifyError() {
+  const status = document.getElementById('obVerifyStatus');
+  status.textContent = "That code didn't match. Try again.";
+  status.style.color = 'rgba(230,140,120,0.85)';
+  const row = document.getElementById('obCodeRow');
+  row.style.animation = 'none'; void row.offsetWidth; row.style.animation = 'shake 320ms ease';
+  setTimeout(() => {
+    codeDigits = '';
+    document.getElementById('obCodeInput').value = '';
+    renderCodeBoxes();
+  }, 380);
+}
+function obResendCode() {
+  const status = document.getElementById('obVerifyStatus');
+  status.style.color = '';
+  status.innerHTML = 'Code resent. Mock code is 000000.';
+}
+function obVerifySuccess() {
+  document.getElementById('obCodeRow').style.display = 'none';
+  document.getElementById('obCodeInput').style.display = 'none';
+  const status = document.getElementById('obVerifyStatus');
+  status.classList.add('ok');
+  status.textContent = 'Verified';
+  document.getElementById('obVerifyBack').style.visibility = 'hidden';
+  const companion = COMPANIONS.find(c => c.id === obState.companion) || COMPANIONS[4];
+  document.getElementById('obHandoffAvatar').innerHTML = companion.svg;
+  document.getElementById('obHandoffTitle').textContent = 'Your ' + companion.name + ' is on their way';
+  setTimeout(() => {
+    status.style.display = 'none';
+    document.getElementById('obHandoff').style.display = 'block';
+  }, 500);
+  setTimeout(() => { go('home'); }, 2400);
+}
+
+/* ---------- init onboarding renders ---------- */
+renderObDots();
+renderGoalChips();
+renderCompanionGrid();
+renderPersonalityList();
+renderEnvGrid();
+renderCodeBoxes();
 </script>
 </body>
 </html>

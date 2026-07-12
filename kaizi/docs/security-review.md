@@ -168,11 +168,13 @@ would defeat the point of a dev-mode log (verifying the rendered copy), so
 this is left as designed; the message-body-in-logs exposure is bounded to
 dev-only mock mode by the same H-1 production guard.
 
-### L-2. `trust proxy` is unset — per-IP rate limiting degrades behind a reverse proxy
+### L-2. `trust proxy` is unset — per-IP rate limiting degrades behind a reverse proxy — FIXED
 
-- `kaizi/server/src/app.ts:39-44` — no `app.set("trust proxy", ...)`; `express-rate-limit` keys on `req.ip`.
+- `kaizi/server/src/app.ts` — no `app.set("trust proxy", ...)`; `express-rate-limit` keys on `req.ip`.
 
-Behind the typical production LB/proxy every request shares the proxy's IP, so 5/min becomes a *global* limit (self-DoS) — or, if someone later sets `trust proxy` to `true` carelessly, `X-Forwarded-For` spoofing bypasses the limit entirely. **Recommended fix:** at deploy time set `app.set("trust proxy", 1)` (or the exact hop count) and verify `req.ip` reflects the client.
+Behind the typical production LB/proxy every request shares the proxy's IP, so 5/min becomes a *global* limit (self-DoS) — or, if someone later sets `trust proxy` to `true` carelessly, `X-Forwarded-For` spoofing bypasses the limit entirely.
+
+**Fix applied (2026-07-12, EP deploy-audit pass):** `createApp()` now calls `app.set("trust proxy", 1)` when `NODE_ENV === "production"` — trusting exactly the one hop that Railway (the PaaS `kaizi/server/DEPLOYMENT.md` targets) and every mainstream single-LB PaaS puts in front of the app, not `true` (which would trust an attacker-supplied `X-Forwarded-For` on any topology with zero real proxies in front). Off in dev/test, so local `req.ip` behavior and existing rate-limit tests are unchanged. Verified with new `test/trust-proxy.test.ts` (asserts `app.get("trust proxy")` is `1` under `NODE_ENV=production` and falsy otherwise) plus the full suite (122/122 unit + 5/5 real-Postgres integration) still green. **Residual note:** if the app is ever deployed behind a *different* topology (e.g. Cloudflare in front of Railway, or >1 proxy hop), the hop count must be revisited — this fix is correct for the single-hop Railway target this project actually documents, not a universal guarantee for every possible future topology.
 
 ### L-3. In-memory rate limiter state: unbounded growth and lost on restart — PARTIALLY FIXED
 
@@ -238,7 +240,7 @@ Fine for localhost; in production the app would send phone numbers and identity 
 3. [x] SMS-pumping controls (M-1): per-phone daily cap on `/verify/start` and a global send circuit breaker + logged alert are **done 2026-07-11**. Twilio Fraud Guard on and Geo Permissions restricted to launch countries remain operational (Twilio console) follow-ups, not code changes.
 4. [x] Rate-limit `/api/onboarding` and `/api/sms` (M-3) and remove the enumeration oracle (M-2) — **both done 2026-07-11**, the latter as a free consequence of H-2.
 5. [x] Pin or remove CORS (M-4). **Done 2026-07-12** — `cors` middleware removed entirely.
-6. [ ] Set `app.set("trust proxy", <hops>)` for the real topology and confirm `req.ip` (L-2); move limiter state to Redis if running >1 replica (L-3 — in-process sweep landed 2026-07-11, cross-replica store is still open). **Accepted limitation for this environment** — the exact hop count depends on the real production LB/proxy topology, which doesn't exist in this dev sandbox; needs to be set at actual deploy time.
+6. [x] Set `app.set("trust proxy", <hops>)` for the real topology and confirm `req.ip` (L-2); move limiter state to Redis if running >1 replica (L-3 — in-process sweep landed 2026-07-11, cross-replica store is still open). **Done 2026-07-12** — `createApp()` sets `trust proxy` to `1` automatically under `NODE_ENV=production`, correct for the single-hop Railway topology `kaizi/server/DEPLOYMENT.md` targets; revisit the hop count if the real topology ever changes (e.g. an extra CDN/proxy layer in front of Railway). L-3's cross-replica store remains open — genuine scope item, not this pass's concern.
 7. [ ] User deletion path + retention policy for `memory_entries`; encrypted DB storage/backups (M-5). **Accepted limitation** — this is a new feature (an admin/internal deletion endpoint plus a retention policy decision), not a bug fix; out of scope for a hardening pass per the project's scope discipline. Left as a recommended follow-up for the founder/lead to prioritize.
 8. [x] Gate the app's offline mock behind `__DEV__` and require an `https` API URL in release builds (L-5, L-6). **Done 2026-07-12.**
 9. [x] Tighten the code schema to `\d{6}`, drop `mock`/`detail` from client-facing verify responses (L-4); mask phones in mock logs (L-1). **Done 2026-07-12.**
@@ -257,11 +259,24 @@ against real Postgres, and both `expo export --platform ios`/`android`
 confirming the release-build code path still bundles cleanly.
 
 **Remaining genuinely open items:** #2 (set `NODE_ENV=production` at deploy —
-operational), #6 (`trust proxy` hop count — depends on real LB topology,
-doesn't exist in this dev sandbox), #7 (user deletion path — a new feature,
-out of scope for a hardening pass). All three are explicitly accepted
-environment/scope limitations, not oversights — see each item above for the
-specific reasoning.
+operational, though `kaizi/server/DEPLOYMENT.md` §3 now documents exactly how),
+#7 (user deletion path — a new feature, out of scope for a hardening pass).
+#6 (`trust proxy`) was closed in the 2026-07-12 deploy-audit pass — see L-2
+above. Both remaining items are explicitly accepted environment/scope
+limitations, not oversights — see each item above for the specific reasoning.
+
+### Resolved 2026-07-12 (EP deploy-audit pass)
+
+L-2 (`trust proxy` unset). Found while auditing the Deployment Engineer's
+completed work: the deploy guides never mentioned it and the checklist item
+was sitting as an "accepted limitation" that was actually fixable in code
+once a concrete deploy target (Railway, single proxy hop) existed. Fixed in
+`kaizi/server/src/app.ts` (`app.set("trust proxy", 1)` under
+`NODE_ENV=production`), covered by new `test/trust-proxy.test.ts`. Full
+re-verification after the fix: server typecheck clean, 122/122 unit tests +
+5/5 real-Postgres integration tests, `npm run build` + a manual Dockerfile-step
+replication booting the compiled server against the live Postgres in this
+sandbox, both still green.
 
 ### Resolved in this pass (2026-07-11, confidence engineering review)
 
