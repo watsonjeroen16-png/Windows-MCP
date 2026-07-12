@@ -487,9 +487,9 @@ body {
 }
 .zone-chip .zdot { width: 6px; height: 6px; border-radius: 50%; background: rgba(240,235,224,0.3); flex-shrink: 0; transition: background 280ms ease; }
 .zone-chip .zlabel { font-family: var(--sans); font-size: 10px; letter-spacing: 0.04em; color: rgba(240,235,224,0.55); white-space: nowrap; transition: color 280ms ease; }
-.zone-chip.active { background: rgba(212,168,83,0.16); border-color: rgba(212,168,83,0.38); }
-.zone-chip.active .zdot { background: var(--gold); box-shadow: 0 0 6px 1px rgba(212,168,83,0.6); }
-.zone-chip.active .zlabel { color: var(--gold); }
+.zone-chip.active { background: color-mix(in srgb, var(--zone-accent, var(--gold)) 16%, transparent); border-color: color-mix(in srgb, var(--zone-accent, var(--gold)) 45%, transparent); }
+.zone-chip.active .zdot { background: var(--zone-accent, var(--gold)); box-shadow: 0 0 6px 1px color-mix(in srgb, var(--zone-accent, var(--gold)) 60%, transparent); }
+.zone-chip.active .zlabel { color: var(--zone-accent, var(--gold)); }
 .zone-chip.locked { opacity: 0.55; cursor: pointer; }
 .zone-chip.locked .zlabel { color: rgba(240,235,224,0.32); }
 .zone-chip.locked svg.lock-ic { opacity: 0.5; }
@@ -507,11 +507,40 @@ body {
 }
 .zone-hint-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-/* World-level tint per zone: same art, re-lit — filter runs on the whole
-   .world node so the SVG scene, particles and companion all shift together. */
+/* ---------- per-zone art + palette (founder round 2: real environments, not
+   a re-tint). Each zone's SVG art lives in its own <g class="zone-art-*">
+   inside the shared land/grove/ground planes so it still gets the same
+   parallax + lighting treatment as the Courtyard; only the current zone's
+   group is opaque. Locked zones (.zone-study/.zone-spring) can still be
+   *previewed* — dimmed, via .zone-locked-preview — so their depth reads
+   before unlock instead of being a total mystery. ---------- */
 #world { transition: filter 900ms ease; }
-.zone-training #world { filter: saturate(1.18) hue-rotate(-14deg) brightness(1.06) contrast(1.04); }
-.zone-training .tint { background: rgba(190,90,40,0.09) !important; }
+.zone-art { opacity: 0; transition: opacity 900ms ease; }
+.zone-courtyard .zone-art-courtyard,
+.zone-training .zone-art-training,
+.zone-study .zone-art-study,
+.zone-spring .zone-art-spring { opacity: 1; }
+
+/* per-zone palette tokens, cascaded from #screen-home down to the zone strip
+   and caption — replaces the old single global hue-rotate filter hack */
+#screen-home { --zone-accent: var(--gold); }
+#screen-home.zone-training { --zone-accent: #C4783A; }
+#screen-home.zone-study    { --zone-accent: #8FA3C4; }
+#screen-home.zone-spring   { --zone-accent: #E8A0C0; }
+
+.zone-wash { position: absolute; inset: 0; pointer-events: none; z-index: 5; opacity: 0; transition: opacity 900ms ease, background 900ms ease; }
+.zone-training .zone-wash { opacity: 1; background: radial-gradient(ellipse at 50% 68%, rgba(196,120,58,0.11), transparent 72%); }
+.zone-study    .zone-wash { opacity: 1; background: radial-gradient(ellipse at 50% 60%, rgba(143,163,196,0.10), transparent 72%); }
+.zone-spring   .zone-wash { opacity: 1; background: radial-gradient(ellipse at 50% 64%, rgba(232,160,192,0.13), transparent 72%); }
+
+.zone-training .zone-caption { color: rgba(196,120,58,0.8); }
+.zone-study    .zone-caption { color: rgba(143,163,196,0.8); }
+.zone-spring   .zone-caption { color: rgba(232,160,192,0.82); }
+
+/* locked-zone preview: a brief, dimmed peek when a locked chip is tapped —
+   the art is real, just held back, not a mystery box (see previewLockedZone). */
+.zone-locked-preview #world { filter: saturate(0.5) brightness(0.7); }
+.zone-locked-preview .zone-wash { opacity: 0.45; }
 
 /* ---------- weather layer (ephemeral, independent of streak/season) ---------- */
 .weather-btn {
@@ -608,7 +637,7 @@ body {
 
 <div class="phone" id="phone">
 <!-- ============ HOME · COMPANION WORLD ============ -->
-<div class="screen active tod-night" id="screen-home">
+<div class="screen active tod-night zone-courtyard" id="screen-home">
   <div class="world" id="world">
     <div class="sky sky-dawn"></div>
     <div class="sky sky-day"></div>
@@ -668,9 +697,14 @@ body {
       <ellipse cx="320" cy="600" rx="60" ry="18" fill="#101710" opacity="0.8"/>
       <ellipse cx="150" cy="640" rx="70" ry="20" fill="#0D120C" opacity="0.9"/>
       </g>
-      <!-- grove (mid parallax plane: maple + bamboo) -->
+      <!-- grove (mid parallax plane: per-zone trees + structures). All four
+           zone groups share this one parallax plane (and the hills/sky
+           behind them stay constant across zones) so switching zones reads
+           as walking further into the same continuous world, not a scene
+           swap — only the mid-ground planting/structures change. -->
       <g id="plGrove" class="parallax-layer">
-      <!-- maple tree -->
+      <!-- The Courtyard: maple + bamboo (unchanged, always-on default zone) -->
+      <g class="zone-art zone-art-courtyard">
       <g class="sway" style="animation-duration:9s;">
         <path d="M70 452 L79 392 Q83 376 97 364 L103 371 Q91 384 89 400 L94 452 Z" fill="#3B2A18"/>
         <path d="M84 404 Q76 396 68 394 L66 399 Q75 402 81 410 Z" fill="#3B2A18"/>
@@ -695,9 +729,69 @@ body {
         <ellipse cx="354" cy="276" rx="13" ry="5.5" fill="#26381D" opacity="0.8" class="sway" style="animation-duration:6.2s;"/>
         <ellipse cx="366" cy="288" rx="11" ry="4.5" fill="#22331A" opacity="0.75" class="sway" style="animation-duration:6.6s;"/>
       </g>
+      </g><!-- /zone-art-courtyard (grove) -->
+
+      <!-- The Training Ground: torii gate + a second, warmer-toned bamboo stand -->
+      <g class="zone-art zone-art-training">
+        <g opacity="0.95">
+          <rect x="46" y="330" width="7" height="122" rx="2" fill="#241512"/>
+          <rect x="118" y="330" width="7" height="122" rx="2" fill="#241512"/>
+          <path d="M32 340 Q85 320 132 340 L132 351 Q85 332 32 351 Z" fill="#3B1B14"/>
+          <rect x="39" y="357" width="86" height="9" rx="2" fill="#2E1610"/>
+          <rect x="79" y="330" width="6" height="27" fill="#241512"/>
+        </g>
+        <g>
+          <rect x="336" y="300" width="4.5" height="215" rx="2.2" fill="#3A3418" class="sway" style="animation-duration:5.4s;"/>
+          <rect x="348" y="278" width="4" height="235" rx="2" fill="#463F1D" class="sway" style="animation-duration:6.2s; animation-delay:0.5s;"/>
+          <rect x="359" y="308" width="3.5" height="205" rx="1.8" fill="#3A3418" class="sway" style="animation-duration:5.8s; animation-delay:1s;"/>
+          <rect x="368" y="290" width="4" height="222" rx="2" fill="#332E14" class="sway" style="animation-duration:6.6s; animation-delay:1.4s;"/>
+          <ellipse cx="342" cy="298" rx="12" ry="5" fill="#4C4420" opacity="0.8" class="sway" style="animation-duration:5.4s;"/>
+          <ellipse cx="354" cy="276" rx="13" ry="5.5" fill="#544B22" opacity="0.8" class="sway" style="animation-duration:6.2s;"/>
+          <ellipse cx="366" cy="288" rx="11" ry="4.5" fill="#4C4420" opacity="0.75" class="sway" style="animation-duration:6.6s;"/>
+        </g>
+      </g><!-- /zone-art-training (grove) -->
+
+      <!-- The Study Veranda (locked teaser): ink-wash distant mountains + a lone pine -->
+      <g class="zone-art zone-art-study" opacity="0.88">
+        <path d="M-10 350 Q60 300 130 344 Q170 320 220 348 Q280 312 385 340 L385 420 L-10 420 Z" fill="#232C36" opacity="0.55"/>
+        <path d="M20 366 Q90 328 160 360 Q230 330 300 362 L300 420 L20 420 Z" fill="#2C3844" opacity="0.42"/>
+        <g class="sway" style="animation-duration:8s;">
+          <rect x="30" y="366" width="4" height="70" fill="#1C1712"/>
+          <ellipse cx="32" cy="356" rx="20" ry="10" fill="#26301F"/>
+          <ellipse cx="24" cy="346" rx="15" ry="8" fill="#2C3824"/>
+          <ellipse cx="42" cy="348" rx="14" ry="7" fill="#26301F"/>
+        </g>
+      </g><!-- /zone-art-study (grove) -->
+
+      <!-- The Spring (locked teaser): two cherry blossom trees -->
+      <g class="zone-art zone-art-spring">
+        <g class="sway" style="animation-duration:8.5s;">
+          <path d="M64 452 L72 396 Q75 382 88 372 L93 379 Q83 390 81 404 L86 452 Z" fill="#4A342A"/>
+          <ellipse cx="86" cy="332" rx="58" ry="38" fill="#E7A9C0" opacity="0.9"/>
+          <ellipse cx="50" cy="354" rx="36" ry="24" fill="#E1A0BA" opacity="0.85"/>
+          <ellipse cx="120" cy="350" rx="40" ry="26" fill="#EAB4C8" opacity="0.85"/>
+          <ellipse cx="88" cy="310" rx="34" ry="21" fill="#F0C2D4" opacity="0.8"/>
+        </g>
+        <g class="sway" style="animation-duration:7s; animation-delay:0.6s;">
+          <path d="M312 452 L318 410 Q320 400 330 393 L333 398 Q327 405 326 414 L330 452 Z" fill="#4A342A"/>
+          <ellipse cx="326" cy="378" rx="38" ry="25" fill="#EAB4C8" opacity="0.85"/>
+          <ellipse cx="306" cy="392" rx="24" ry="16" fill="#E1A0BA" opacity="0.8"/>
+        </g>
+      </g><!-- /zone-art-spring (grove) -->
       </g><!-- /plGrove -->
 
       <g class="parallax-layer pl-ground">
+      <!-- shared stepping-stone path: the same physical walk into every
+           zone, so switching zones never reads as teleporting — you're
+           always standing in one continuous garden, just further in. -->
+      <ellipse cx="187" cy="702" rx="15" ry="6.5" fill="#1A1713"/>
+      <ellipse cx="197" cy="666" rx="13" ry="5.8" fill="#181511"/>
+      <ellipse cx="183" cy="632" rx="13.5" ry="6" fill="#1A1713"/>
+      <ellipse cx="193" cy="600" rx="12" ry="5.4" fill="#181511"/>
+      <ellipse cx="185" cy="570" rx="12.5" ry="5.6" fill="#1A1713"/>
+
+      <!-- The Courtyard (default, always unlocked) -->
+      <g class="zone-art zone-art-courtyard">
       <!-- sand garden (left) -->
       <ellipse cx="103" cy="522" rx="80" ry="31" fill="#151310"/>
       <ellipse cx="103" cy="521" rx="72" ry="26" fill="#1D1A14"/>
@@ -771,13 +865,6 @@ body {
         </g>
       </g>
 
-      <!-- stepping stones -->
-      <ellipse cx="187" cy="702" rx="15" ry="6.5" fill="#1A1713"/>
-      <ellipse cx="197" cy="666" rx="13" ry="5.8" fill="#181511"/>
-      <ellipse cx="183" cy="632" rx="13.5" ry="6" fill="#1A1713"/>
-      <ellipse cx="193" cy="600" rx="12" ry="5.4" fill="#181511"/>
-      <ellipse cx="185" cy="570" rx="12.5" ry="5.6" fill="#1A1713"/>
-
       <!-- meditation stone -->
       <ellipse cx="187" cy="586" rx="22" ry="8" fill="#1E1B16"/>
       <ellipse cx="187" cy="583" rx="18" ry="6" fill="#26221C" opacity="0.85"/>
@@ -814,6 +901,119 @@ body {
 
       <!-- rising embers near lantern (JS also spawns .ember particles above the pools) -->
       <circle cx="176" cy="450" r="1.6" fill="rgba(212,168,83,0.5)" class="anim" style="animation: firefly 6s ease-in-out infinite; opacity: var(--lamp);"/>
+      </g><!-- /zone-art-courtyard (ground) -->
+
+      <!-- The Training Ground (unlocked): raked gravel, a tsukubai water
+           basin, a wrapped training post, and a dojo mat underfoot — the
+           same footprint the Courtyard's sand garden/pond/meditation stone
+           occupy, re-purposed rather than just re-tinted. -->
+      <g class="zone-art zone-art-training">
+        <!-- raked gravel, concentric rings around a practice mark -->
+        <ellipse cx="103" cy="522" rx="80" ry="31" fill="#171410"/>
+        <ellipse cx="103" cy="521" rx="72" ry="26" fill="#201C15"/>
+        <ellipse cx="103" cy="521" rx="58" ry="21" stroke="#332C1E" stroke-width="1" fill="none" opacity="0.55"/>
+        <ellipse cx="103" cy="521" rx="42" ry="15" stroke="#332C1E" stroke-width="1" fill="none" opacity="0.5"/>
+        <ellipse cx="103" cy="521" rx="26" ry="9.5" stroke="#332C1E" stroke-width="1" fill="none" opacity="0.5"/>
+        <ellipse cx="103" cy="521" rx="10" ry="4" stroke="#332C1E" stroke-width="1" fill="none" opacity="0.5"/>
+        <circle cx="103" cy="521" r="4.5" fill="#2A2419"/>
+
+        <!-- tsukubai stone water basin, where the koi pond sat -->
+        <ellipse cx="258" cy="522" rx="70" ry="26" fill="#171410"/>
+        <ellipse cx="258" cy="508" rx="26" ry="12" fill="#211D18"/>
+        <ellipse cx="258" cy="505" rx="20" ry="8.5" fill="#0E1A20"/>
+        <ellipse cx="258" cy="504" rx="13" ry="5" class="pond-hi"/>
+        <ellipse cx="252" cy="502" rx="16" ry="6" stroke="rgba(190,215,220,0.16)" stroke-width="0.8" fill="none" class="anim" style="animation: ripple 5.4s ease-out infinite;"/>
+        <path d="M278 494 Q296 490 300 476" stroke="#2E2915" stroke-width="4" fill="none" stroke-linecap="round"/>
+        <circle cx="300" cy="475" r="2.4" fill="#1B2A16"/>
+
+        <!-- wooden training post (makiwara), where the meditation stone sat -->
+        <ellipse cx="187" cy="600" rx="14" ry="5.5" fill="#1E1B16"/>
+        <rect x="182" y="524" width="9" height="78" rx="3" fill="#4A3A22"/>
+        <path d="M182 540 L191 540" stroke="#7A5528" stroke-width="1.4" opacity="0.7"/>
+        <path d="M182 555 Q186.5 552 191 555" stroke="#7A5528" stroke-width="1.4" fill="none" opacity="0.55"/>
+        <path d="M182 570 Q186.5 574 191 570" stroke="#7A5528" stroke-width="1.4" fill="none" opacity="0.55"/>
+        <path d="M181 546 Q186.5 550 192 546" stroke="#C9A25A" stroke-width="1.6" fill="none" opacity="0.6"/>
+
+        <!-- dojo mat underfoot -->
+        <rect x="70" y="668" width="235" height="100" rx="6" fill="#241C12" opacity="0.9"/>
+        <rect x="76" y="674" width="223" height="88" rx="4" fill="#332818" opacity="0.85"/>
+        <line x1="76" y1="700" x2="299" y2="700" stroke="#241C12" stroke-width="1" opacity="0.5"/>
+        <line x1="76" y1="726" x2="299" y2="726" stroke="#241C12" stroke-width="1" opacity="0.5"/>
+        <line x1="150" y1="674" x2="150" y2="762" stroke="#241C12" stroke-width="1" opacity="0.4"/>
+        <line x1="224" y1="674" x2="224" y2="762" stroke="#241C12" stroke-width="1" opacity="0.4"/>
+
+        <!-- small stone lantern by the torii, always softly lit (decorative — not gated on streak state) -->
+        <g opacity="0.92">
+          <rect x="336" y="460" width="4" height="26" rx="2" fill="#241E15"/>
+          <rect x="330.5" y="454" width="15" height="6.5" rx="3" fill="#2A231A"/>
+          <path d="M332.5 454 L338 446 L343.5 454 Z" fill="#2A231A"/>
+          <circle cx="338" cy="464" r="9" fill="rgba(196,120,58,0.16)" class="lantern-flick anim"/>
+          <circle cx="338" cy="464" r="3.6" fill="rgba(212,150,90,0.55)"/>
+        </g>
+      </g><!-- /zone-art-training (ground) -->
+
+      <!-- The Study Veranda (locked teaser): engawa platform, shoji screens,
+           a low reading table — dimmed via .zone-locked-preview until unlocked. -->
+      <g class="zone-art zone-art-study">
+        <!-- shoji screens standing behind the veranda -->
+        <rect x="70" y="470" width="66" height="96" rx="3" fill="rgba(220,205,175,0.10)" stroke="#2E2A22" stroke-width="1.5"/>
+        <line x1="70" y1="502" x2="136" y2="502" stroke="#2E2A22" stroke-width="1"/>
+        <line x1="70" y1="534" x2="136" y2="534" stroke="#2E2A22" stroke-width="1"/>
+        <line x1="103" y1="470" x2="103" y2="566" stroke="#2E2A22" stroke-width="1"/>
+        <rect x="145" y="462" width="66" height="104" rx="3" fill="rgba(220,205,175,0.13)" stroke="#2E2A22" stroke-width="1.5"/>
+        <line x1="145" y1="496" x2="211" y2="496" stroke="#2E2A22" stroke-width="1"/>
+        <line x1="145" y1="530" x2="211" y2="530" stroke="#2E2A22" stroke-width="1"/>
+        <line x1="178" y1="462" x2="178" y2="566" stroke="#2E2A22" stroke-width="1"/>
+        <rect x="220" y="472" width="60" height="94" rx="3" fill="rgba(220,205,175,0.09)" stroke="#2E2A22" stroke-width="1.5"/>
+        <line x1="220" y1="503" x2="280" y2="503" stroke="#2E2A22" stroke-width="1"/>
+        <line x1="250" y1="472" x2="250" y2="566" stroke="#2E2A22" stroke-width="1"/>
+
+        <!-- engawa wooden veranda platform -->
+        <rect x="40" y="566" width="295" height="70" rx="4" fill="#241E15"/>
+        <rect x="44" y="570" width="287" height="60" rx="3" fill="#3A2E1C"/>
+        <line x1="44" y1="588" x2="331" y2="588" stroke="#241E15" stroke-width="1" opacity="0.6"/>
+        <line x1="44" y1="606" x2="331" y2="606" stroke="#241E15" stroke-width="1" opacity="0.6"/>
+        <line x1="90" y1="570" x2="90" y2="630" stroke="#241E15" stroke-width="1" opacity="0.4"/>
+        <line x1="180" y1="570" x2="180" y2="630" stroke="#241E15" stroke-width="1" opacity="0.4"/>
+        <line x1="270" y1="570" x2="270" y2="630" stroke="#241E15" stroke-width="1" opacity="0.4"/>
+        <!-- low railing -->
+        <rect x="44" y="558" width="287" height="4" rx="2" fill="#2A2216"/>
+        <rect x="60" y="558" width="3" height="14" fill="#2A2216"/>
+        <rect x="150" y="558" width="3" height="14" fill="#2A2216"/>
+        <rect x="240" y="558" width="3" height="14" fill="#2A2216"/>
+        <rect x="310" y="558" width="3" height="14" fill="#2A2216"/>
+
+        <!-- low reading table + cushion -->
+        <rect x="150" y="606" width="60" height="6" rx="2" fill="#4A3A22"/>
+        <rect x="156" y="612" width="4" height="14" fill="#2E2414"/>
+        <rect x="200" y="612" width="4" height="14" fill="#2E2414"/>
+        <ellipse cx="230" cy="622" rx="16" ry="6" fill="#5A2E30"/>
+      </g><!-- /zone-art-study (ground) -->
+
+      <!-- The Spring (locked teaser): an onsen pool with rock edging, rising
+           steam, and drifted petals — warmer color temperature than the
+           other zones, per the founder's ask. -->
+      <g class="zone-art zone-art-spring">
+        <ellipse cx="220" cy="524" rx="105" ry="44" fill="#2A1512"/>
+        <ellipse cx="220" cy="521" rx="94" ry="37" fill="#4A2420"/>
+        <ellipse cx="220" cy="519" rx="66" ry="25" fill="#6B3830"/>
+        <ellipse cx="200" cy="514" rx="24" ry="9" fill="rgba(255,220,190,0.10)"/>
+        <!-- rock edging -->
+        <ellipse cx="128" cy="530" rx="16" ry="9" fill="#33291E"/>
+        <ellipse cx="140" cy="516" rx="12" ry="7" fill="#3A2F22"/>
+        <ellipse cx="308" cy="536" rx="17" ry="9.5" fill="#33291E"/>
+        <ellipse cx="298" cy="518" rx="11" ry="6.5" fill="#3A2F22"/>
+        <!-- rising steam -->
+        <ellipse cx="185" cy="486" rx="14" ry="30" fill="rgba(255,235,220,0.05)" class="anim" style="animation: fog-drift 9s ease-in-out infinite alternate;"/>
+        <ellipse cx="235" cy="478" rx="12" ry="34" fill="rgba(255,235,220,0.045)" class="anim" style="animation: fog-drift 11s ease-in-out infinite alternate; animation-delay: 1.5s;"/>
+        <ellipse cx="260" cy="490" rx="10" ry="26" fill="rgba(255,235,220,0.04)" class="anim" style="animation: fog-drift 8s ease-in-out infinite alternate; animation-delay: 0.8s;"/>
+        <!-- drifted petals underfoot -->
+        <circle cx="70" cy="590" r="2.4" fill="rgba(232,168,192,0.6)"/>
+        <circle cx="90" cy="610" r="2" fill="rgba(232,168,192,0.5)"/>
+        <circle cx="300" cy="600" r="2.2" fill="rgba(232,168,192,0.55)"/>
+        <circle cx="325" cy="580" r="1.8" fill="rgba(232,168,192,0.5)"/>
+        <circle cx="55" cy="560" r="1.6" fill="rgba(232,168,192,0.45)"/>
+      </g><!-- /zone-art-spring (ground) -->
       </g><!-- /pl-ground (segment 2) -->
     </svg>
 
@@ -1048,6 +1248,7 @@ body {
     <div id="speech"></div>
     </div><!-- /#groundLayer -->
     <div class="tint"></div>
+    <div class="zone-wash"></div>
     <!-- weather layer (proposal §4.3): ephemeral, independent of the streak-driven season above -->
     <div class="rain-layer" id="rainLayer"></div>
     <div class="mist-layer"></div>
