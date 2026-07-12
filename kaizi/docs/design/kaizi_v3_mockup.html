@@ -363,6 +363,58 @@ body {
 }
 .label-xs { font-size: 9px; letter-spacing: 0.11em; text-transform: uppercase; color: rgba(240,235,224,0.3); font-family: var(--sans); }
 
+/* ---------- manual "add your own intention" (Intentions sheet) ----------
+   A user-authored intention is visually distinguished from Haru's
+   suggestions (implicit — the swipe deck above this section is always
+   companion-sourced) via a "Yours" badge + a sand-colored left border,
+   rather than a loud competing style. ---------- */
+.user-intention-item {
+  display: flex; align-items: center; gap: 10px;
+  background: rgba(255,255,255,0.04); border: 0.5px solid rgba(255,255,255,0.08);
+  border-left: 2.5px solid var(--sand); border-radius: 13px;
+  padding: 10px 13px; margin-bottom: 6px;
+}
+.ui-check {
+  width: 20px; height: 20px; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+  border: 1.3px solid rgba(212,168,83,0.4);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 200ms ease;
+}
+.ui-check.done { background: rgba(212,168,83,0.85); border-color: var(--gold); }
+.ui-badge {
+  font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--sand);
+  background: rgba(200,184,154,0.12); border: 0.5px solid rgba(200,184,154,0.32);
+  border-radius: 999px; padding: 2px 7px; flex-shrink: 0; font-family: var(--sans);
+}
+.add-intention-row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 15px; border-radius: 13px; cursor: pointer;
+  border: 1px dashed rgba(212,168,83,0.35); background: rgba(212,168,83,0.04);
+  font-family: var(--sans); font-size: 12.5px; letter-spacing: 0.01em; color: var(--gold);
+  transition: all 220ms ease;
+}
+.add-intention-row:active { transform: scale(0.98); background: rgba(212,168,83,0.09); }
+.add-intention-form {
+  display: flex; flex-direction: column; gap: 8px;
+  background: rgba(255,255,255,0.04); border: 0.5px solid rgba(255,255,255,0.1);
+  border-radius: 15px; padding: 14px; margin-top: 2px;
+}
+.ai-input {
+  width: 100%; background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: 12px; padding: 10px 13px; font-size: 13px; color: var(--cream);
+  font-family: var(--sans); outline: none;
+}
+.ai-input::placeholder { color: rgba(240,235,224,0.3); }
+.ai-actions { display: flex; gap: 8px; margin-top: 2px; }
+.ai-btn {
+  flex: 1; text-align: center; padding: 10px; border-radius: 999px; cursor: pointer;
+  font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; font-family: var(--sans);
+  transition: all 200ms ease;
+}
+.ai-btn.cancel { background: rgba(255,255,255,0.04); border: 0.5px solid rgba(255,255,255,0.08); color: rgba(240,235,224,0.4); }
+.ai-btn.confirm { background: rgba(212,168,83,0.14); border: 0.5px solid rgba(212,168,83,0.3); color: var(--gold); }
+.ai-btn:active { transform: scale(0.96); }
+
 /* ---------- keyframes ---------- */
 @keyframes sway { 0%,100% { transform: rotate(0deg); } 50% { transform: rotate(1.6deg); } }
 @keyframes cloud-drift { 0% { transform: translateX(-14px); } 100% { transform: translateX(26px); } }
@@ -1340,6 +1392,24 @@ body {
         <div class="label-xs" style="color:var(--gold);">Intention kept</div>
       </div>
     </div>
+
+    <!-- Yours today: manual "add your own intention" affordance — Haru
+         suggests, but the day's intentions aren't only Haru's suggestions. -->
+    <div class="label-xs" style="margin-top:18px; margin-bottom:8px;">Yours today</div>
+    <div id="userIntentionsList"></div>
+    <div class="add-intention-row" id="addIntentionRow" onclick="toggleAddIntentionForm()">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      <span>Add your own</span>
+    </div>
+    <div class="add-intention-form" id="addIntentionForm" style="display:none;">
+      <input class="ai-input" id="newIntentionTitle" placeholder="Name your intention" maxlength="60" onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('newIntentionNote').focus();}"/>
+      <input class="ai-input" id="newIntentionNote" placeholder="Optional note" maxlength="80" onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmAddIntention();}"/>
+      <div class="ai-actions">
+        <div class="ai-btn cancel" onclick="cancelAddIntention()">Cancel</div>
+        <div class="ai-btn confirm" onclick="confirmAddIntention()">Add to today</div>
+      </div>
+    </div>
+
     <div class="label-xs" style="margin-top:16px; margin-bottom:8px;">Tomorrow</div>
     <div style="display:flex;flex-direction:column;gap:6px;">
       <div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.07);border-radius:13px;padding:10px 15px;display:flex;gap:12px;align-items:center;">
@@ -1834,6 +1904,65 @@ function swipeCard(dir) {
   }, 380);
 }
 
+/* ---------- manual "add your own intention" (founder round 2 ask) ----------
+   The swipe deck above is always Haru's suggestions. This is a second,
+   user-authored list, genuinely wired into the same kept/total ring state:
+   adding one grows today's total; checking one off grows kept — same as
+   keepPromise()/swipeCard() do for a companion-suggested intention. ---------- */
+let userIntentions = [];
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function toggleAddIntentionForm() {
+  const form = document.getElementById('addIntentionForm');
+  const opening = form.style.display === 'none' || !form.style.display;
+  form.style.display = opening ? 'flex' : 'none';
+  document.getElementById('addIntentionRow').style.display = opening ? 'none' : 'flex';
+  if (opening) document.getElementById('newIntentionTitle').focus();
+}
+function cancelAddIntention() {
+  document.getElementById('newIntentionTitle').value = '';
+  document.getElementById('newIntentionNote').value = '';
+  document.getElementById('addIntentionForm').style.display = 'none';
+  document.getElementById('addIntentionRow').style.display = 'flex';
+}
+function confirmAddIntention() {
+  const titleEl = document.getElementById('newIntentionTitle');
+  const noteEl = document.getElementById('newIntentionNote');
+  const title = titleEl.value.trim();
+  if (!title) { titleEl.focus(); return; }
+  userIntentions.push({ id: 'u' + Date.now() + Math.floor(Math.random() * 1000), title, note: noteEl.value.trim(), kept: false, source: 'user' });
+  total++; updateRing();
+  renderUserIntentions();
+  titleEl.value = ''; noteEl.value = '';
+  document.getElementById('addIntentionForm').style.display = 'none';
+  document.getElementById('addIntentionRow').style.display = 'flex';
+}
+function toggleUserIntentionKept(id) {
+  const item = userIntentions.find(i => i.id === id);
+  if (!item) return;
+  if (!item.kept) {
+    item.kept = true; kept = Math.min(total, kept + 1); updateRing(); petalBurst();
+  } else {
+    item.kept = false; kept = Math.max(0, kept - 1); updateRing();
+  }
+  renderUserIntentions();
+}
+function renderUserIntentions() {
+  const list = document.getElementById('userIntentionsList');
+  list.innerHTML = userIntentions.map(i => `
+    <div class="user-intention-item">
+      <div class="ui-check${i.kept ? ' done' : ''}" onclick="toggleUserIntentionKept('${i.id}')">
+        ${i.kept ? '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#0E0D0B" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>' : ''}
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div style="font-family:var(--serif); font-size:14px; color:var(--cream);">${escapeHtml(i.title)}</div>
+        ${i.note ? `<div style="font-size:10.5px; color:rgba(240,235,224,0.4); margin-top:2px;">${escapeHtml(i.note)}</div>` : ''}
+      </div>
+      <span class="ui-badge">Yours</span>
+    </div>`).join('');
+}
+
 /* ---------- You screen: segmented tabs (Progress / Companion / Settings) ---------- */
 function showYouTab(name) {
   ['progress', 'companion', 'settings'].forEach(t => {
@@ -1843,15 +1972,19 @@ function showYouTab(name) {
 }
 
 /* ---------- zone travel strip: goal-personalized garden depth (proposal §4.1) ----------
-   Same continuous world (shared sky, shared companion, shared time-of-day) —
-   only a re-lighting filter + caption change per zone, not separate art.
-   Locked zones show their unlock condition instead of switching. */
+   Same continuous world (shared sky, shared companion, shared time-of-day,
+   shared distant hills) — but each zone now has its own real SVG art (see
+   the zone-art-* groups in the land/grove/ground planes), not a re-tint of
+   the Courtyard. Locked zones show their unlock condition *and* a brief,
+   dimmed preview of their real art (previewLockedZone) instead of just a
+   toast, so the depth reads before unlock. */
 const ZONES = [
-  { id: 'courtyard', label: 'The Courtyard', locked: false, caption: 'The Courtyard · always yours', cls: '' },
-  { id: 'training', label: 'Training Ground', locked: false, caption: 'The Training Ground · for Fitness & Discipline', cls: 'zone-training' },
-  { id: 'study', label: 'Study Veranda', locked: true, caption: 'The Study Veranda', cls: '', hint: 'Unlocks after a 7-day streak in Learning' },
-  { id: 'spring', label: 'The Spring', locked: true, caption: 'The Spring', cls: '', hint: 'Unlocks after a 7-day streak in Skin' },
+  { id: 'courtyard', label: 'The Courtyard', locked: false, caption: 'The Courtyard · always yours', cls: 'zone-courtyard' },
+  { id: 'training', label: 'Training Ground', locked: false, caption: 'The Training Ground · raked gravel, bamboo, and a torii gate for Fitness & Discipline', cls: 'zone-training' },
+  { id: 'study', label: 'Study Veranda', locked: true, caption: 'The Study Veranda · a quiet engawa for Business & Learning', cls: 'zone-study', hint: 'Unlocks after a 7-day streak in Learning' },
+  { id: 'spring', label: 'The Spring', locked: true, caption: 'The Spring · cherry blossoms over a warm onsen for Skin', cls: 'zone-spring', hint: 'Unlocks after a 7-day streak in Skin' },
 ];
+const ZONE_CLASSES = ZONES.map(z => z.cls);
 let currentZone = 'courtyard';
 function renderZoneStrip() {
   const strip = document.getElementById('zoneStrip');
@@ -1862,16 +1995,35 @@ function renderZoneStrip() {
       ${z.locked ? '<svg class="lock-ic" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>' : ''}
     </div>`).join('');
 }
+function applyZoneVisual(z) {
+  const world = document.getElementById('screen-home');
+  world.classList.remove('zone-locked-preview');
+  ZONE_CLASSES.forEach(c => world.classList.remove(c));
+  world.classList.add(z.cls);
+  document.getElementById('zoneCaption').textContent = z.caption;
+}
+let lockedPreviewTimer = null;
 function selectZone(id) {
   const z = ZONES.find(zz => zz.id === id);
   if (!z) return;
-  if (z.locked) { showZoneHint(z.hint); return; }
+  if (z.locked) { showZoneHint(z.hint); previewLockedZone(z); return; }
+  clearTimeout(lockedPreviewTimer);
   currentZone = id;
-  const world = document.getElementById('screen-home');
-  ZONES.forEach(zz => { if (zz.cls) world.classList.remove(zz.cls); });
-  if (z.cls) world.classList.add(z.cls);
-  document.getElementById('zoneCaption').textContent = z.caption;
+  applyZoneVisual(z);
   renderZoneStrip();
+}
+function previewLockedZone(z) {
+  const world = document.getElementById('screen-home');
+  ZONE_CLASSES.forEach(c => world.classList.remove(c));
+  world.classList.add(z.cls);
+  world.classList.add('zone-locked-preview');
+  document.getElementById('zoneCaption').textContent = z.caption + ' · locked';
+  renderZoneStrip();
+  clearTimeout(lockedPreviewTimer);
+  lockedPreviewTimer = setTimeout(() => {
+    applyZoneVisual(ZONES.find(zz => zz.id === currentZone));
+    renderZoneStrip();
+  }, 2600);
 }
 let zoneHintTimer = null;
 function showZoneHint(text) {
