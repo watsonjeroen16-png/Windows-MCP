@@ -650,6 +650,132 @@ body {
 .you-panel.active { display: block; }
 
 /* ---------- 2-item nav: same .nav-pill element, NAV array now has 2 entries ---------- */
+
+/* =========================================================================
+   ONBOARDING FLOW — clickable Welcome→World arc (founder round-3 ask).
+   Screens: Welcome(existing) → Goals → Why → Quiz(10 cards) →
+   Screen-Time Consent → Companion → Personality → Environment → Phone →
+   Verify → World. Order/placement follows personalization-spec.md §1.4's
+   approved "New flow" table (Quiz then Screen-Time immediately after, before
+   the Companion/Personality/Environment stretch) — that's the exact
+   in-situ arrangement the founder is meant to be evaluating here.
+   Reuses the same .screen / go() mechanism already in the file; adds a
+   thin onboarding-only component layer below, styled per tokens.md. ---------- */
+.ob-screen { background: var(--ink); position: relative; }
+.ob-bg { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.ob-status { position: relative; z-index: 5; height: 54px; padding: 16px 20px 0; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+.ob-back { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; transition: transform 200ms ease; }
+.ob-back:active { transform: scale(0.9); }
+.ob-dots { display: flex; gap: 8px; align-items: center; }
+.ob-dot { width: 5px; height: 5px; border-radius: 999px; background: rgba(255,255,255,0.14); transition: all 250ms ease-out; }
+.ob-dot.done { background: rgba(212,168,83,0.5); }
+.ob-dot.current { width: 14px; background: var(--gold); }
+.ob-body { position: relative; z-index: 5; flex: 1; display: flex; flex-direction: column; overflow-y: auto; padding: 8px 28px 0; }
+.ob-eyebrow { font-family: var(--sans); font-size: 9px; letter-spacing: 0.11em; text-transform: uppercase; color: rgba(240,235,224,0.3); }
+.ob-title { font-family: var(--serif); font-size: 28px; font-weight: 300; color: var(--cream); line-height: 1.15; margin-top: 6px; letter-spacing: -0.01em; }
+.ob-sub { font-family: var(--serif); font-style: italic; font-size: 13.5px; color: var(--sand); margin-top: 7px; line-height: 1.4; }
+.ob-footer { position: relative; z-index: 5; padding: 14px 28px 44px; flex-shrink: 0; }
+.ob-cta {
+  border-radius: 999px; padding: 16px; text-align: center; cursor: pointer;
+  font-family: var(--sans); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  background: rgba(212,168,83,0.10); border: 0.5px solid rgba(212,168,83,0.22); color: var(--gold);
+  transition: all 220ms ease;
+}
+.ob-cta:active { transform: scale(0.98); }
+.ob-cta.disabled { background: transparent; border-color: rgba(255,255,255,0.08); color: rgba(240,235,224,0.2); cursor: default; pointer-events: none; }
+.ob-cta.hero { background: rgba(255,255,255,0.10); border-color: rgba(255,255,255,0.22); color: var(--cream); font-size: 14px; padding: 18px; }
+.ob-foot-note { text-align: center; margin-top: 14px; font-family: var(--serif); font-style: italic; font-size: 12px; color: rgba(240,235,224,0.35); }
+
+.ob-chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.ob-chip {
+  border-radius: 999px; padding: 11px 18px; cursor: pointer; user-select: none;
+  font-family: var(--sans); font-size: 12px; color: rgba(240,235,224,0.65);
+  background: transparent; border: 0.5px solid rgba(255,255,255,0.15);
+  transition: all 220ms ease;
+}
+.ob-chip.selected { background: rgba(212,168,83,0.18); border-color: rgba(212,168,83,0.42); color: var(--gold); animation: xp-pop 350ms ease; }
+.ob-hint { text-align: center; min-height: 16px; margin-top: 14px; font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.04em; color: rgba(212,168,83,0.65); }
+
+.ob-textarea {
+  width: 100%; min-height: 160px; background: rgba(255,255,255,0.04); border: 0.5px solid rgba(255,255,255,0.1);
+  border-radius: 16px; padding: 16px; font-family: var(--sans); font-size: 14.5px; color: var(--cream);
+  line-height: 1.6; resize: none; outline: none;
+}
+.ob-textarea::placeholder { color: rgba(240,235,224,0.3); }
+.ob-counter { text-align: right; font-family: var(--sans); font-size: 10px; color: rgba(240,235,224,0.25); margin-top: 6px; }
+
+.ob-quiz-progress { font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.04em; color: rgba(240,235,224,0.35); margin-top: 6px; }
+.ob-quiz-bar { height: 2.5px; background: rgba(255,255,255,0.08); border-radius: 999px; margin-top: 8px; overflow: hidden; }
+.ob-quiz-bar-fill { height: 100%; background: var(--gold); border-radius: 999px; transition: width 380ms ease; }
+.ob-skip { text-align: center; margin-top: 18px; font-family: var(--sans); font-size: 11px; color: rgba(240,235,224,0.3); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.ob-skip-quiz { font-family: var(--sans); font-size: 10px; letter-spacing: 0.04em; color: rgba(240,235,224,0.3); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+.ob-consent-body { font-family: var(--sans); font-size: 13.5px; color: rgba(240,235,224,0.62); line-height: 1.6; margin-top: 18px; }
+.ob-toggle-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  background: rgba(255,255,255,0.04); border: 0.5px solid rgba(255,255,255,0.08);
+  border-radius: 18px; padding: 15px 17px; margin-top: 20px;
+}
+.ob-toggle-label { font-family: var(--serif); font-size: 15px; color: var(--cream); }
+.ob-toggle-sub { font-family: var(--sans); font-size: 10.5px; color: rgba(240,235,224,0.4); margin-top: 3px; }
+.ob-toggle { width: 44px; height: 26px; border-radius: 999px; flex-shrink: 0; position: relative; cursor: pointer; transition: all 250ms ease-out; background: rgba(255,255,255,0.10); border: 0.5px solid rgba(255,255,255,0.14); }
+.ob-toggle .ob-knob { position: absolute; top: 2.5px; left: 2.5px; width: 19px; height: 19px; border-radius: 50%; background: rgba(240,235,224,0.5); transition: all 250ms ease-out; }
+.ob-toggle.on { background: rgba(212,168,83,0.2); border-color: rgba(212,168,83,0.4); }
+.ob-toggle.on .ob-knob { left: 21.5px; background: var(--gold); }
+.ob-android-note { font-family: var(--sans); font-size: 10px; color: rgba(240,235,224,0.35); margin-top: 8px; line-height: 1.5; }
+
+.ob-grid2 { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 12px; padding-top: 4px; padding-bottom: 20px; }
+.ob-companion-card {
+  background: rgba(255,255,255,0.06); border: 0.5px solid rgba(255,255,255,0.12); border-radius: 22px;
+  padding: 16px 10px 14px; text-align: center; cursor: pointer; transition: all 220ms ease;
+}
+.ob-companion-card.selected { border-color: rgba(212,168,83,0.42); background: rgba(212,168,83,0.08); }
+.ob-companion-card .ob-avatar { width: 62px; height: 66px; margin: 0 auto 8px; }
+.ob-companion-card .ob-avatar svg { width: 100%; height: 100%; animation: idle-breathe 4.6s ease-in-out infinite; }
+.ob-companion-name { font-family: var(--serif); font-size: 14.5px; color: var(--cream); }
+.ob-companion-card.selected .ob-companion-name { color: var(--gold); }
+.ob-companion-trait { font-family: var(--sans); font-size: 8.5px; letter-spacing: 0.09em; text-transform: uppercase; color: rgba(240,235,224,0.3); margin-top: 3px; }
+
+.ob-plist { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; padding-bottom: 20px; }
+.ob-pcard { background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.08); border-radius: 18px; padding: 15px 16px; cursor: pointer; transition: all 220ms ease; }
+.ob-pcard.selected { border-color: rgba(212,168,83,0.4); }
+.ob-pcard-row { display: flex; align-items: baseline; justify-content: space-between; }
+.ob-pcard-name { font-family: var(--serif); font-size: 16px; color: var(--cream); }
+.ob-pcard.selected .ob-pcard-name { color: var(--gold); }
+.ob-pcard-tag { font-family: var(--sans); font-size: 8.5px; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(240,235,224,0.3); }
+.ob-pcard-bubble { margin-top: 10px; background: rgba(255,255,255,0.06); border: 0.5px solid rgba(255,255,255,0.09); border-radius: 4px 16px 16px 16px; padding: 11px 14px; font-family: var(--serif); font-style: italic; font-size: 13.5px; color: var(--cream); line-height: 1.5; }
+
+.ob-grid3 { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 9px; padding-top: 4px; padding-bottom: 20px; }
+.ob-env-tile {
+  aspect-ratio: 1/1.2; border-radius: 15px; border: 0.5px solid rgba(255,255,255,0.1); cursor: pointer;
+  position: relative; overflow: hidden; display: flex; align-items: flex-end; padding: 8px; transition: all 220ms ease;
+}
+.ob-env-tile.selected { border-color: rgba(212,168,83,0.45); box-shadow: inset 0 0 0 1px rgba(212,168,83,0.25); }
+.ob-env-label { font-family: var(--sans); font-size: 8.5px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(240,235,224,0.85); position: relative; z-index: 2; }
+.ob-env-tile.selected .ob-env-label { color: var(--gold); }
+.ob-env-scrim { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 40%, rgba(0,0,0,0.4) 100%); z-index: 1; }
+.ob-env-begin { position: absolute; top: 6px; right: 7px; font-family: var(--sans); font-size: 6.5px; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(212,168,83,0.75); z-index: 2; }
+
+.ob-phone-field {
+  display: flex; align-items: center; background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.12);
+  border-radius: 999px; padding: 14px 20px; gap: 10px; margin-top: 18px;
+}
+.ob-phone-cc { font-family: var(--sans); font-size: 15px; color: var(--cream); flex-shrink: 0; }
+.ob-phone-div { width: 0.5px; height: 18px; background: rgba(255,255,255,0.14); flex-shrink: 0; }
+.ob-phone-input { flex: 1; background: transparent; border: none; outline: none; font-family: var(--sans); font-size: 15px; color: var(--cream); }
+.ob-phone-input::placeholder { color: rgba(240,235,224,0.3); }
+
+.ob-code-row { display: flex; gap: 9px; justify-content: center; margin-top: 26px; }
+.ob-code-box {
+  width: 42px; height: 52px; border-radius: 14px; background: rgba(255,255,255,0.05); border: 0.5px solid rgba(255,255,255,0.12);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--serif); font-size: 22px; color: var(--cream); transition: all 200ms ease;
+}
+.ob-code-box.filled { animation: xp-pop 300ms ease; border-color: rgba(255,255,255,0.22); }
+.ob-verify-status { text-align: center; margin-top: 22px; font-family: var(--sans); font-size: 11px; color: rgba(240,235,224,0.4); }
+.ob-verify-status.ok { color: var(--gold); }
+.ob-handoff { text-align: center; padding: 30px 10px 0; }
+.ob-handoff .ob-hbubble { margin: 16px auto 0; max-width: 260px; background: rgba(255,255,255,0.06); border: 0.5px solid rgba(255,255,255,0.1); border-radius: 4px 16px 16px 16px; padding: 13px 16px; font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--cream); line-height: 1.5; text-align: left; }
 </style>
 </head>
 <body>
@@ -1504,7 +1630,7 @@ body {
     <div style="font-family:var(--serif);font-size:16px;font-style:italic;font-weight:300;color:var(--sand);letter-spacing:0.06em;text-align:center;line-height:1.5;">"Improve a little.<br/>Win a lot."</div>
   </div>
   <div style="position:relative;z-index:5;padding:0 32px 60px;">
-    <div onclick="go('home')" style="background:rgba(255,255,255,0.10);border:0.5px solid rgba(255,255,255,0.22);border-radius:999px;padding:18px;text-align:center;cursor:pointer;font-family:var(--sans);font-size:14px;letter-spacing:0.12em;text-transform:uppercase;color:var(--cream);">Enter the garden</div>
+    <div onclick="go('ob-goals')" style="background:rgba(255,255,255,0.10);border:0.5px solid rgba(255,255,255,0.22);border-radius:999px;padding:18px;text-align:center;cursor:pointer;font-family:var(--sans);font-size:14px;letter-spacing:0.12em;text-transform:uppercase;color:var(--cream);">Enter the garden</div>
     <div style="text-align:center;margin-top:16px;font-family:var(--serif);font-style:italic;font-size:13px;color:rgba(240,235,224,0.35);">Every promise shapes who you're becoming</div>
   </div>
 </div>
