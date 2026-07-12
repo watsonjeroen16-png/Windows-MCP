@@ -330,6 +330,29 @@ export async function createIntention(
   }
 }
 
+/**
+ * POST /api/intentions/generate — AI-generate personalized intentions
+ * (personalization-spec.md section 3.2; kaizi/server/src/routes/intentions.ts's
+ * doc comment: "the natural place a client calls when the world has no
+ * intentions yet for today"). Every row this creates lands with
+ * `source: "companion"`, distinguishing it from user-authored intentions —
+ * this is what actually populates the companion-suggested side of the
+ * Intentions sheet; without calling it, "Yours today" would be the only
+ * section that's ever non-empty.
+ */
+export async function generateIntentions(
+  token: string,
+  options?: { count?: number; scheduledFor?: string }
+): Promise<{ intentions: Intention[]; scheduledFor: string } | null> {
+  const response = await post("/api/intentions/generate", options ?? {}, token);
+  if (response === null || !response.ok) return null;
+  try {
+    return (await response.json()) as { intentions: Intention[]; scheduledFor: string };
+  } catch {
+    return null;
+  }
+}
+
 /** POST /api/intentions/:id/keep — mark an intention kept. */
 export async function keepIntention(id: string, token: string): Promise<Intention | null> {
   const response = await post(`/api/intentions/${encodeURIComponent(id)}/keep`, {}, token);

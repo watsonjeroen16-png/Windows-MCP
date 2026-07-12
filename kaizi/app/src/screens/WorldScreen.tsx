@@ -5,12 +5,12 @@
  * screens. Reuses the same CompanionAvatar/idle-motion already built for
  * onboarding (src/ui/CompanionAvatar.tsx) rather than a second rig.
  */
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { interpolate, useAnimatedStyle } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
 
-import { getIntentions, type Intention } from "../api/client";
+import { generateIntentions, getIntentions, type Intention } from "../api/client";
 import { companionById } from "../data/companions";
 import { isZoneUnlocked, ZONES, zoneById } from "../data/zones";
 import { CompanionAvatar } from "../ui/CompanionAvatar";
@@ -98,6 +98,10 @@ export function WorldScreen() {
   const { state, dispatch } = useWorld();
   const [intentions, setIntentions] = useState<Intention[] | null>(null);
   const [lockedHint, setLockedHint] = useState<string | null>(null);
+  // Guards against calling /generate more than once per mount — a day with
+  // zero intentions stays zero after a failed/empty generation attempt
+  // rather than retrying on every re-render.
+  const generateAttempted = useRef(false);
 
   const companionMeta = companionById(state.companion);
   const zoneMeta = zoneById(state.zone);
@@ -106,7 +110,17 @@ export function WorldScreen() {
   const refreshIntentions = useCallback(() => {
     void (async () => {
       const result = await getIntentions(state.identity.sessionToken);
-      if (result !== null) setIntentions(result.intentions);
+      if (result === null) return;
+      if (result.intentions.length === 0 && !generateAttempted.current) {
+        // Empty day — ask the companion to generate personalized intentions
+        // (routes/intentions.ts's own doc comment names this exact moment as
+        // the intended call site) rather than leaving the world empty.
+        generateAttempted.current = true;
+        const generated = await generateIntentions(state.identity.sessionToken);
+        setIntentions(generated?.intentions ?? result.intentions);
+        return;
+      }
+      setIntentions(result.intentions);
     })();
   }, [state.identity.sessionToken]);
 

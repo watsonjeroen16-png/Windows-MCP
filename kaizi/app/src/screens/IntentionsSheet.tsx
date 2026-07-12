@@ -5,16 +5,16 @@
  * `POST /api/intentions/:id/keep` (world-build-plan.md); the "Yours today"
  * section is this round's new manual "add your own intention" affordance.
  *
- * Source note: `kaizi/server/src/routes/intentions.ts`'s createIntentionSchema
- * doesn't accept a `source` field yet (checked against the live file — the
- * backend agent's migration adds the DB column with `DEFAULT 'user'`, but the
- * route itself doesn't expose it as a request field, and `IntentionRow`
- * already types `source` on the response). That default is exactly what this
- * screen needs — every intention created here lands as `source: 'user'`
- * without the client having to say so — so "Yours today" filters on
+ * Source note: `POST /api/intentions` (used here for manual adds) doesn't
+ * accept a `source` field in its request body — every intention created here
+ * lands as `source: 'user'` purely via the DB column's `DEFAULT 'user'`
+ * (migration 003_personalization.sql), without the client having to say so.
+ * The companion-suggested counterpart is `POST /api/intentions/generate`
+ * (called from WorldScreen when a day has no intentions yet), which persists
+ * `source: 'companion'` explicitly server-side. So "Yours today" filters on
  * `intention.source === 'user'` (falling back to `true` if `source` is ever
  * absent from an API response, so the section still renders sensibly against
- * an older server).
+ * an older server) — everything else in the list is a companion suggestion.
  */
 import React, { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";

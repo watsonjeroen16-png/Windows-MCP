@@ -305,6 +305,37 @@ describe("api/client — Companion World endpoints (mocked fetch)", () => {
     expect(body).toEqual({ title: "Morning run", rewardGrowth: 20, scheduledFor: "2026-07-12" });
   });
 
+  it("generateIntentions POSTs to /api/intentions/generate and returns the companion-sourced batch", async () => {
+    const generated = [
+      {
+        id: "g1",
+        user_id: "u1",
+        title: "Stretch for 10 minutes",
+        subtitle: null,
+        reward_growth: 15,
+        scheduled_for: "2026-07-12",
+        status: "pending",
+        source: "companion",
+        created_at: "2026-07-12T00:00:00.000Z",
+        kept_at: null,
+      },
+    ];
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ intentions: generated, scheduledFor: "2026-07-12" }), {
+        status: 201,
+      })
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { generateIntentions } = await import("./client");
+    const result = await generateIntentions("tok");
+
+    expect(result).toEqual({ intentions: generated, scheduledFor: "2026-07-12" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://test-server.invalid/api/intentions/generate");
+    expect(init.method).toBe("POST");
+  });
+
   it("keepIntention POSTs to /:id/keep with an empty body", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ intention: { id: "i1", status: "kept" } }), { status: 200 })
