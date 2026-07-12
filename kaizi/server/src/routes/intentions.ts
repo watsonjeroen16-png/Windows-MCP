@@ -6,7 +6,7 @@
  * (for phone -> userId lookup, same pattern as routes/onboarding.ts) and the
  * new WorldDb, without this file constructing its own connections.
  *
- * Not wired into app.ts/index.ts here — see PENDING_INTEGRATION.md.
+ * Mounted in app.ts alongside the onboarding/verify/sms routers.
  */
 
 import { Router } from "express";
@@ -155,6 +155,19 @@ export function createIntentionsRouter({ db, worldDb, sessionTokens }: Intention
   // for today. Every created row is persisted with source: "companion"
   // (see migration 003_personalization.sql), distinguishing it from
   // user-authored intentions created via POST /.
+  //
+  // Idempotency guard (EP security pass, 2026-07-12): this route calls the
+  // real, paid Claude API (spec 3.2 — same model as chat, once/day/user
+  // usage pattern assumed). Without a guard, a client bug (WorldScreen
+  // remounting) or deliberate repeat-calling would trigger a fresh Opus
+  // call — and a fresh set of duplicate companion-sourced rows — on every
+  // call, with no cap beyond the generic per-IP world rate limit (30/min,
+  // shared across all four world routers). If intentions already exist for
+  // the requested scheduledFor, short-circuit and return them (200, no new
+  // rows, no API call) instead of generating again. This caps real spend to
+  // at most one generation per user per scheduledFor date, matching the
+  // spec's own assumed usage pattern, and closes the duplicate-row
+  // side-effect for free.
   router.post("/generate", validateBody(generateIntentionsSchema), async (req, res, next) => {
     try {
       const phone = (req as AuthedRequest).authPhone!;
@@ -166,6 +179,12 @@ export function createIntentionsRouter({ db, worldDb, sessionTokens }: Intention
 
       const input = req.body as z.infer<typeof generateIntentionsSchema>;
       const scheduledFor = input.scheduledFor ?? todayIsoDate();
+
+      const existing = await worldDb.listIntentionsForDate(user.id, scheduledFor);
+      if (existing.length > 0) {
+        res.status(200).json({ intentions: existing, scheduledFor });
+        return;
+      }
 
       const [userWithProfile, customization, quizResponses] = await Promise.all([
         db.getUserWithProfile(phone),

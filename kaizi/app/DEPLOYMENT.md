@@ -1,12 +1,18 @@
 # Kaizi App — Build & App-Store Submission (EAS)
 
 This guide covers building the Expo app with EAS Build and submitting it to
-TestFlight / the App Store and Google Play. **Do not run a production build
-or submission until the Retention Architect's screen-restructure mockup is
-approved and built** — see `kaizi/docs/DEPLOYMENT-READINESS.md`. The
-`eas.json` and this guide are ready now so that, once the app is ready to
-ship, there's no infrastructure work left to do — only the decision to press
-go.
+TestFlight / the App Store and Google Play. **The screen restructure is now
+built** (World/You restructure + onboarding quiz, see
+`kaizi/docs/design/app-restructure-v3.md` and
+`kaizi/docs/confidence-report-v3.md`) — but hold off on a **public** store
+submission until the remaining items in `kaizi/docs/DEPLOYMENT-READINESS.md`
+are resolved: no build has ever been visually verified on a real device or
+simulator, and the store-account/credential/legal items in §5 below are still
+outstanding. An internal-testing build (TestFlight internal / Play internal
+track) is a reasonable next step to get real device eyes on the app before
+those are all resolved. The `eas.json` and this guide are ready now so that,
+once the app is ready to ship, there's no infrastructure work left to do —
+only the decision to press go.
 
 ## 0. Founder decisions this guide assumes (see below if not yet made)
 
@@ -142,13 +148,17 @@ and the beginner-friendly step-by-step for getting each credential is in
 - **App icon / splash assets** — `kaizi/app/assets/` has `icon.png`,
   `android-icon-*.png`, `favicon.png`, `splash-icon.png` already in place
   from the onboarding build; confirm with the founder whether these are
-  final production-quality assets or placeholders pending the Retention
-  Architect's redesign (a store listing needs a polished 1024×1024 icon at
-  minimum).
+  final production-quality assets or placeholders — the screen restructure
+  they were originally placeholders pending is now built
+  (`app-restructure-v3.md`), so this is now just an asset-finalization
+  decision, not blocked on further design work (a store listing needs a
+  polished 1024×1024 icon at minimum).
 - **App Store listing copy + screenshots** — title, subtitle, description,
   keywords, category, and screenshots for each required device size. Not
-  started; blocked on the screen redesign per
-  `kaizi/docs/DEPLOYMENT-READINESS.md`.
+  started. No longer blocked on the screen redesign (that's built now, see
+  `kaizi/docs/DEPLOYMENT-READINESS.md`) — screenshots can be captured once
+  the app has been run on a real device or simulator, which hasn't happened
+  yet in any sandbox pass to date.
 - **Privacy policy URL** — **required by both stores**, not optional
   boilerplate. Kaizi collects phone numbers (Twilio verification) and
   personal reflections (journal entries, chat messages, "why" answers) — this

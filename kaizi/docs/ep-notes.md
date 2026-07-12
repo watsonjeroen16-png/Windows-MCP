@@ -161,3 +161,94 @@ The one genuine security-relevant gap found (`trust proxy`) is now closed in cod
 regression test, not just noted. The credentials guide is trustworthy enough for a
 non-technical founder to follow literally: every URL, every env var name, and every
 cross-reference checks out against the real source and the real internet as of this pass.
+
+---
+
+# EP Final Sweep — 2026-07-12 (v3: quiz + World/You restructure)
+
+Same mandate as the two passes above, this time closing out the personalization-spec.md
+quiz + `app-restructure-v3.md` World/You build that backend2, mobile, and the Confidence
+Engineer just finished (`confidence-report-v3.md`: zero functional bugs, server 175/175,
+app 81/81). Independently re-ran every number myself before touching anything — all
+matched exactly. Full writeup of everything fixed/verified this pass is in
+`ep-final-report.md`'s 2026-07-12 section; this entry is specifically the reasoning trail
+for the one open design question the task asked me to gut-check: **is goal-based-only
+zone unlocking (no streak ratchet) actually broken/misleading, or an acceptable v1
+simplification?**
+
+## Zone-unlock gating: goal-based-only — judged acceptable, not building the ratchet
+
+**What's built:** `app/src/data/zones.ts`'s `isZoneUnlocked(zone, goals)` returns `true`
+the moment a user's onboarding `goals[]` contains any goal the zone maps to (Fitness/
+Discipline → Training Ground, Business/Learning → Study Veranda, Skin → Spring). No
+streak, no time delay, no server call — pure client-side derivation from a value chosen
+once at onboarding and never currently editable post-onboarding (`YouScreen`'s
+`CompanionPanel` lets you edit species/personality/environment, not goals).
+
+**What the spec originally wanted:** `world-spec.md` §6 and `app-restructure-v3.md` §5 #1
+both describe zones being *earned* via a 7-day per-goal streak, ratcheted so the unlock
+can never reverse on a missed day — the more aspirational, game-like version of "the
+world grows with you." That needs a `zone_state`/streak-milestone table that doesn't
+exist (this is ep-notes Gap 2 above, extended to per-goal zones by backend2's own
+2026-07-12 determination — logged in `.agents/events.ndjson` and summarized in
+`app-restructure-v3.md` §5 #1).
+
+**The gut-check, and why I'm not building a guard or the table:**
+
+1. **It cannot mislead the user about mechanism.** I checked the actual locked-zone
+   copy the mobile agent shipped (`zones.ts`'s `lockedHint` field): "Unlocks when you
+   pick Fitness or Discipline as a goal" — not "Unlocks after a 7-day streak," which
+   would have been a lie about what actually gates it. The UI text was already written
+   to match the simpler, real implementation rather than a mismatched aspirational
+   version. If it had shipped with streak-flavored copy backing a goal-only mechanism,
+   that would've been a real bug (false promise to the user) worth a same-pass fix. It
+   didn't.
+2. **It cannot regress, which is the one hard invariant both specs actually require.**
+   §6's "cumulative and permanent (never reverse on a missed day)" rule is the load-bearing
+   requirement — not "must be earned slowly." A goal picked at onboarding and never
+   editable is, definitionally, monotonic: it's either in `goals[]` or it isn't, and
+   nothing in the shipped app can remove a goal from that array once onboarding
+   completes. So the simplification trivially satisfies the actual invariant the spec
+   cared about, just via a blunter mechanism (immediate unlock) than the intended one
+   (earned unlock). That's a *product depth* gap (zones don't yet feel earned) — not a
+   correctness gap.
+3. **A "quick guard" isn't well-defined here.** I looked for what a guard would even
+   protect against: there's no exploit, no data leak, no crash, no state that can go
+   wrong. The only thing missing is the more interesting mechanic. Bolting on a fake
+   partial-streak check (e.g., "unlock only after N intentions kept toward that goal,"
+   computed live from `intentions` history with no persistence) would actually be
+   *worse* than what's shipped — it would violate the never-reverse rule for real (a
+   broken streak would un-derive the unlock), which is exactly the bug class Gap 2 was
+   raised to prevent in the first place. Building that badly would be a regression
+   dressed up as a fix.
+4. **The real fix (the ratchet table) is already correctly out of scope.** Both
+   `app-restructure-v3.md` §5 and backend2's own 2026-07-12 log entry already flag this
+   as a shared design decision (the table shape needs to serve both the general
+   streak-milestone mechanic from Gap 2 *and* per-goal zones) that shouldn't be
+   preempted by a narrow task. I agree with that framing and am not overriding it here
+   — building a one-off, zone-specific ratchet table in this pass would create exactly
+   the kind of shape-mismatch follow-up cost that guidance was trying to avoid.
+
+**Verdict: accepted v1 simplification, not a bug.** No code change made. Documented here
+per the task's explicit instruction to record the reasoning either way. Follow-up: once
+the lead decides the shared ratchet-table shape (Gap 2), extending it to per-goal zone
+unlocking is the correct next step — not a patch on the current goal-only gate.
+
+## Other flagged items from this pass, briefly (full detail in `ep-final-report.md`)
+
+- **Fixed** (real, cheap, in-scope): `WorldScreen`/`YouScreen` now use
+  `useSafeAreaInsets` instead of fixed padding, matching the onboarding screens'
+  existing correct pattern (`OnboardingScreen.tsx`).
+- **Assessed, not fixed** (already honest, not confusing): You→Progress and Settings
+  both ship with explicit in-UI notes explaining what's not built yet rather than
+  fabricating data or offering dead-looking interactive rows. Verified by reading the
+  actual rendered copy in `YouScreen.tsx`, not just the code comments describing it.
+- **Fixed** (real cost/abuse gap, found during the security addendum): `POST
+  /api/intentions/generate` had no per-day idempotency guard — repeat calls each
+  triggered a fresh paid Claude Opus call and duplicate rows. Added a check-existing-
+  before-generating guard; verified with 3 new tests plus a live curl walkthrough
+  against real Postgres. See `security-review.md`'s 2026-07-12 addendum for full detail.
+- **Fixed** (trivial, zero runtime effect): the stale "Not wired into app.ts/index.ts
+  here — see PENDING_INTEGRATION.md" header comment in `chat.ts`, `customization.ts`,
+  `intentions.ts`, `journal.ts` (all four are in fact mounted; `PENDING_INTEGRATION.md`
+  no longer exists) — replaced with an accurate one-liner.

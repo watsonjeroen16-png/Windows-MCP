@@ -5,15 +5,20 @@ customization, Journey, Reflection. Builds on the approved `world-spec.md` mecha
 the founder-approved v2 mockup. Vocabulary: **"Promise" → "Intention"** throughout, per
 founder decision (2026-07-11).
 
-Status: **backend surface built and wired** (2026-07-11). The Companion World Backend
-Engineer built the migration, `WorldDb` interface, and the four routers below as new files
-while the Confidence Engineer finished its onboarding hardening pass in parallel (per its
+Status: **backend surface built and wired** (2026-07-11); **mobile World/You screens built
+and verified** (2026-07-12, see `app-restructure-v3.md` and
+`kaizi/docs/confidence-report-v3.md`). The Companion World Backend Engineer built the
+migration, `WorldDb` interface, and the four routers below as new files while the
+Confidence Engineer finished its onboarding hardening pass in parallel (per its
 `PENDING_INTEGRATION.md`, to avoid two agents racing on `app.ts`/`index.ts`); those files
 have since been wired in by hand (routers mounted, `WorldDb` constructed in `index.ts`,
 `ANTHROPIC_API_KEY` documented in `.env.example`, per-IP rate limiting added), typechecked,
 and verified end-to-end against real Postgres (migration `002_companion_world.sql` applied
 cleanly after `001_init.sql`). See `kaizi/server/README.md` for the live endpoint contract.
-**Mobile screens are still queued** — nothing in `kaizi/app` consumes this surface yet.
+**Mobile screens are built**: `kaizi/app/src/screens/WorldScreen.tsx` and `YouScreen.tsx`
+consume `intentions`/`chat`/`customization`/`journal` live, plus the newer
+`quiz`/`intentions/generate` surface from `personalization-spec.md` — see that doc and
+`app-restructure-v3.md` for what shipped on top of this backend surface.
 
 ---
 
@@ -76,13 +81,17 @@ development and testing.
   be built): no server-side "current activity" tracking, no persisted world-state/streak-
   milestone table. See `kaizi/docs/ep-notes.md`.
 
-## New app screens (queued, not yet built)
+## New app screens — built (2026-07-12)
 
-Home (living world, real companion state) · Companion Chat (real AI, replacing the
-mockup's static demo) · Intentions (renamed Promises screen) · Journey · Identity/Profile
-with real customization · Reflection. Visual target: the enhanced garden mockup once the
-Motion Designer's pass is approved. **The backend surface above is ready for these to
-consume** — nothing in `kaizi/app` reaches it yet.
+`app-restructure-v3.md` superseded this section's original flat Home/Chat/Intentions/
+Journey/Identity/Reflection screen list with the World/You restructure (two destinations,
+not five — World as the only home, You as a deliberate side trip, Chat/Intentions/
+Reflection as contextual sheets over the world). That's what actually got built:
+`WorldScreen.tsx`, `YouScreen.tsx`, `ZoneBackground.tsx`, `ChatSheet.tsx`,
+`IntentionsSheet.tsx`, `ReflectionSheet.tsx` in `kaizi/app/src/screens/` and `src/ui/`,
+consuming every endpoint listed above plus the quiz/generate surface from
+`personalization-spec.md`. Verified end-to-end (live curl + contract audit + both `expo
+export` targets) in `kaizi/docs/confidence-report-v3.md`.
 
 ## Sequencing
 
@@ -91,6 +100,8 @@ consume** — nothing in `kaizi/app` reaches it yet.
    (`kaizi_v2_enhanced.html`); founder approval status not tracked in this doc.
 3. ~~Backend: new migration + endpoints above, including the chat integration.~~ Done, wired,
    verified against real Postgres.
-4. Mobile: new screens wired to the new endpoints, replacing the mockup's demo JS. **Not
-   started.**
-5. QA pass across the expanded app. **Not started** — depends on step 4.
+4. ~~Mobile: new screens wired to the new endpoints.~~ Done (2026-07-12) — built as the
+   World/You restructure per `app-restructure-v3.md`, not the original flat screen list this
+   section used to describe; see above.
+5. QA pass across the expanded app. **Done** — see `kaizi/docs/confidence-report-v3.md` and
+   `kaizi/docs/ep-final-report.md`'s 2026-07-12 entry.

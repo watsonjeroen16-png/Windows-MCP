@@ -8,13 +8,21 @@ toward the person they want to become — through daily promises, check-ins, and
 long-term memory of their goals, wins, and struggles. Retention comes from the
 relationship, not the todo list.
 
-This repository contains two phases. **Shipped:** the onboarding flow MVP — a
-7-screen mobile onboarding (goals, identity, companion, personality, environment,
-SMS setup with phone verification) backed by an API that persists the profile and
-sends the companion's first personalized SMS. **In progress:** the Companion World
-backend (Intentions, real companion chat via the Claude API, post-onboarding
-customization, Reflection journal — see `docs/design/world-build-plan.md`) is built
-and wired into the server; the Expo screens that consume it are not started yet.
+This repository contains two phases, both shipped as of 2026-07-12. **Onboarding:**
+an 8-screen mobile onboarding (goals, identity, a 10-question personalization quiz,
+companion, personality, environment, SMS setup with phone verification) backed by an
+API that persists the profile and sends the companion's first personalized SMS — see
+`docs/design/onboarding-spec.md` and `docs/design/personalization-spec.md`.
+**Companion World:** the post-onboarding app — Intentions, real companion chat via
+the Claude API (personalized against the quiz + goals + identity), post-onboarding
+customization, Reflection journal, and AI-generated daily intentions — built
+server-side and consumed by the World/You restructure (`docs/design/
+app-restructure-v3.md`): World is the app's only home (zone travel strip, companion,
+chat), You is a deliberate side trip (Progress/Companion/Settings), and Chat/
+Intentions/Reflection are contextual bottom sheets over the world rather than
+separate tabs. Verified end-to-end against real Postgres in
+`docs/confidence-report-v3.md` — zero functional bugs, 175/175 server tests, 81/81
+app tests, both `expo export` targets clean.
 
 **New to the project?** Start with the
 **[Founder Guide](docs/founder-guide.md)** — a friendly, step-by-step
@@ -85,7 +93,8 @@ cd kaizi/app
 npm install
 npm start                    # Expo dev server; press i / a or scan QR
 npm run typecheck            # tsc --noEmit
-npm test                     # pure-logic unit tests (reducer, validators, formatters)
+npm test                     # pure-logic unit tests (reducers, validators, formatters,
+                              # zone gating, quiz, API client) — 81/81 as of 2026-07-12
 ```
 
 Set `EXPO_PUBLIC_API_URL` (see `kaizi/app/.env.example`) to point at the server.
@@ -96,13 +105,17 @@ onboarding flow can be exercised offline.
 
 - Onboarding mockup: `docs/design/kaizi_mvp_mockup.html`
 - Companion World mockups: `docs/design/kaizi_v2_mockup.html` (founder-provided
-  foundation), `docs/design/kaizi_v2_enhanced.html` (animation/motion pass)
+  foundation), `docs/design/kaizi_v2_enhanced.html` (animation/motion pass),
+  `docs/design/kaizi_v3_mockup.html` (World/You restructure)
 - Wireframes: `docs/design/wireframes.md`
 - Onboarding spec: `docs/design/onboarding-spec.md`
+- Personalization (quiz + AI-generated intentions): `docs/design/personalization-spec.md`
 - Companion World spec + retention mechanics: `docs/design/world-spec.md`,
   `docs/design/v2-retention-proposals.md`, `docs/design/world-build-plan.md`
+- App restructure (World/You, zones, sheets): `docs/design/app-restructure-v3.md`
 - Tokens: `docs/design/tokens.md`
 
 Aesthetic in one line: dark ink grounds, cream/sand/gold accents, Cormorant
 Garamond serif for meaning, Inter sans for structure, glassmorphism cards, quiet
-zen-garden motion. The product speaks in "promises", not tasks.
+zen-garden motion. The product speaks in "intentions", not tasks (renamed from
+"promises" per the founder's 2026-07-11 decision, see `world-build-plan.md`).

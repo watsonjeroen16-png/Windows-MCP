@@ -5,7 +5,7 @@
  * middleware/auth.ts (imported, not edited). Default export is a factory —
  * see routes/intentions.ts for the same shape and rationale.
  *
- * Not wired into app.ts/index.ts here — see PENDING_INTEGRATION.md.
+ * Mounted in app.ts alongside the onboarding/verify/sms routers.
  */
 
 import { Router } from "express";

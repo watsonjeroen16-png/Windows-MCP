@@ -1,6 +1,11 @@
 # Kaizi Onboarding Stack — Security Review
 
-**Date:** 2026-07-11 · **Reviewer:** security agent · **Scope:** `kaizi/server/src/` (routes, middleware, services, db) and `kaizi/app/src/api` + phone/verification screens. Defensive review of first-party code.
+**Date:** 2026-07-11 (original) · **2026-07-12 addendum:** scoped review of the two v3
+personalization routes (`POST /api/onboarding/quiz`, `POST /api/intentions/generate`) and the
+new World screens' input handling — see "v3 addendum" section near the end. · **Reviewer:**
+security agent (original), EP (addendum) · **Scope:** `kaizi/server/src/` (routes, middleware,
+services, db) and `kaizi/app/src/api` + phone/verification screens. Defensive review of
+first-party code.
 
 **Overall posture:** solid for a pre-production build. Parameterized SQL throughout, Zod validation on every body, helmet, a generic error handler that never leaks stacks, per-IP *and* per-phone rate limiting on verify, `.env` gitignored with a placeholder-only `.env.example`, and no hardcoded secrets found. The material gaps are architectural: no session credential after verification, a fail-open mock mode (now guarded), and SMS-pumping economics.
 
@@ -288,3 +293,115 @@ concurrent requests could both trigger a real Twilio send) was found while
 writing tests for H-2 and fixed alongside it — see H-2 above and
 `docs/confidence-report.md` for full verification evidence (tests + live
 curl walkthroughs against real Postgres).
+
+---
+
+## v3 addendum (2026-07-12, EP final sweep) — quiz + intention-generate + World screens
+
+Scoped review, per the task brief: the two routes added by the personalization-spec.md v3 build
+(`POST /api/onboarding/quiz`, `POST /api/intentions/generate`) hadn't been through a security pass
+yet, plus the new World screens' handling of user-entered text (IntentionsSheet's manual add,
+ReflectionSheet's journal entry, ChatSheet's message composer). Not a full re-review of everything
+above — those findings stand as already resolved/accepted.
+
+### `POST /api/onboarding/quiz` — clean, no changes needed
+
+- **Auth:** mounted under `/api/onboarding` in `app.ts`, behind the same `auth` (session-token)
+  middleware as `/profile`, plus the router's own `phone_verified_at` re-check
+  (`routes/onboarding.ts`). Identical posture to the already-reviewed `/profile` endpoint.
+- **Rate limiting:** same `createVerifyIpRateLimit` instance as `/api/onboarding/profile` and
+  `/api/sms` (5/min/IP) — appropriate for a route called once per user at onboarding handoff.
+- **Injection risk in the JSONB store:** none found. Every one of the 10 answer fields is a
+  `z.enum(...)` (or a `z.array` of one) via `quizAnswersSchema.strict()` in `schemas.ts` — there is
+  no free-text field anywhere in the quiz. `.strict()` rejects unknown keys with a 400 rather than
+  silently dropping or storing them. The Postgres write (`db/index.ts`
+  `upsertQuizResponses`) parameterizes the whole `answers` object as a single `$2` via
+  `JSON.stringify(...)` — no string-built SQL, no risk of a crafted answer value breaking out of
+  the JSONB literal. Confirmed by reading the code, not just inferring from the schema.
+- **Prompt-injection risk into the Claude system prompt (chat + intention-generation):** also none.
+  Because every quiz answer is drawn from a fixed enum set chosen server-side (`buildQuizProfileDigest`
+  in `services/quiz-digest.ts` interpolates only known enum values into fixed sentence templates —
+  never raw user text), there is no way for a quiz answer to inject arbitrary instructions into the
+  system prompt the way a free-text field could. This is worth noting explicitly because the
+  pre-existing `identityWhy` field (onboarding, unchanged by this pass) *is* free text up to 280
+  characters and *is* interpolated into both the chat and intention-generation prompts — that's an
+  existing, pre-v3 surface (not introduced or widened by the quiz), acceptable at MVP scale since
+  the only actor who can inject into their own companion's system prompt is the user themselves
+  talking to their own companion, not a cross-user attack — but flagging the asymmetry so it isn't
+  mistaken for something the quiz introduced.
+
+### `POST /api/intentions/generate` — real gap found and fixed
+
+This route calls the real Claude API (`claude-opus-4-8`, the same model as chat, `max_tokens: 1024`)
+once per request when `ANTHROPIC_API_KEY` is set — real per-call cost, same category of concern
+`M-1` already addresses for Twilio.
+
+- **Auth:** `requireAuth` applied at the router level (`intentions.ts`), consistent with the other
+  three world routers. Verified: unauthenticated → 401.
+- **Rate limiting:** behind `worldIpRateLimit` (30/min per IP, one shared middleware instance
+  applied to all four world routers — `/api/intentions`, `/api/chat`, `/api/customization`,
+  `/api/journal` — so the 30/min budget is aggregate across all of them per IP, not 30/min for
+  `/generate` alone).
+- **Real gap found: no per-day idempotency guard.** Before this fix, calling `POST
+  /api/intentions/generate` twice for the same user and the same `scheduledFor` triggered **two**
+  full-price Claude calls and persisted **two** sets of duplicate `source: 'companion'` rows — the
+  route had no memory of "I already generated today." Under the generic 30/min/IP world limiter,
+  that's up to 30 real Opus calls per minute per IP purely against this one endpoint (nothing else
+  in the shared budget stops a caller from spending the whole window on `/generate` alone), with no
+  additional protection — unlike Twilio's `/verify/start`, which got both a per-phone **daily** cap
+  and a **global** circuit breaker in the M-1 fix, `/generate` had neither, despite calling the more
+  expensive API per unit call (Opus, `max_tokens: 1024` vs. chat's `max_tokens: 300`). This wasn't
+  theoretical: it's also the exact failure mode a client-side bug (WorldScreen remounting while a
+  day still reads as empty) could trigger unintentionally, not just deliberate abuse.
+  **Fix applied:** `routes/intentions.ts`'s `/generate` handler now checks
+  `worldDb.listIntentionsForDate(user.id, scheduledFor)` first; if any intentions already exist for
+  that date (regardless of source — a manually-added intention also short-circuits it), it returns
+  them as-is (`200`, no new rows, no API call) instead of generating again. This caps real Claude
+  spend on this route to **at most one generation per user per calendar day** (per `scheduledFor`),
+  which is also exactly the usage pattern `personalization-spec.md` §3.3 already assumed
+  ("likely once/day/user") — the fix makes the code actually enforce the assumption the spec's own
+  caching-cost reasoning depended on, rather than just hoping clients behave. Verified with 3 new
+  regression tests (`test/world/intentions-source-and-generate.test.ts`: repeat-call short-circuit
+  with identical IDs returned, short-circuit against pre-existing user-authored intentions, and a
+  different `scheduledFor` still generating normally) plus a live curl walkthrough against the real
+  server + real Postgres (first call 201/3 rows, second call 200/same 3 IDs, `GET /` still shows 3
+  not 6). Full suite re-verified green after the change: server typecheck clean, 170/170 unit tests
+  (+8 correctly-skipped real-DB) + 8/8 real-Postgres integration.
+- **Screen-time leakage check:** confirmed `services/intention-generator.ts`'s system prompt
+  explicitly instructs the model "Never mention screen time, phone usage, or app usage — that data
+  is not available to you" and the input struct has no screen-time field at all — consistent with
+  the founder's cut of `personalization-spec.md` §2; nothing in this route can leak or reference
+  screen-time data because none is ever passed to it.
+- **Pattern note, not a new gap:** unlike `/api/onboarding/profile` and `/quiz`, none of the four
+  world routers (`intentions`, `chat`, `customization`, `journal`) re-check `phone_verified_at` at
+  request time — they trust the session token's embedded phone claim, which can only exist if
+  verification succeeded at token-issuance time (`POST /api/verify/check`). This is a pre-existing
+  pattern from backend2's first Companion World pass (not introduced by the personalization work),
+  consistent across all four world routers including the two new quiz/generate routes' sibling
+  endpoints, and not a real gap given there's no revocation mechanism that would make the token's
+  claim stale mid-lifetime (30-minute expiry, no separate "un-verify" path exists). Noting for
+  completeness, not flagging as an issue.
+
+### New World screens' user input — verified, no findings
+
+- **`IntentionsSheet` (manual "add your own intention"):** client-side `TextInput` caps title at 60
+  chars and note/subtitle at 80 (`maxLength` prop), both comfortably under the server's
+  `createIntentionSchema` caps (title 200, subtitle 200) — no client/server mismatch that would let
+  a truncated client value slip past a tighter server rule, and the server re-validates regardless
+  of what the client sends.
+- **`ReflectionSheet` (journal entry) / `ChatSheet` (message composer):** no client-side `maxLength`,
+  but both are backstopped by server-side Zod caps (`journal.ts`: 4000 chars, `chat.ts`: 2000 chars)
+  that reject an oversized body with `400` — no bypass path exists since the server is the only
+  place these are ever persisted or sent to Claude. Missing client-side `maxLength` here is a UX
+  polish gap (a very long paste would hit a server 400 with no friendlier client-side warning), not
+  a security issue; not fixed in this pass as it's cosmetic, not a vulnerability.
+- **XSS / markup injection:** structurally not applicable — React Native's `<Text>` always renders
+  string content as literal text, never interpreted markup; there is no `dangerouslySetInnerHTML`
+  equivalent in this codebase and grepping confirms none was introduced.
+
+### Verdict
+
+One real, fixable gap found (`/generate`'s missing per-day idempotency guard) and fixed with tests
+and live verification. Everything else scoped for this addendum — the quiz route's injection
+surface, the World screens' input handling, and the auth/rate-limit posture of both new routes —
+checked out clean on direct inspection, not just inferred from the existing patterns they reuse.

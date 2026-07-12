@@ -209,3 +209,207 @@ Docs: `README.md`, `docs/architecture.md`, `docs/qa-report.md`,
 `docs/security-review.md`, `docs/design/onboarding-spec.md`,
 `docs/design/world-build-plan.md`, `docs/design/world-spec.md`, new
 `docs/ep-notes.md`, this file.
+
+---
+
+# EP Final Report — v3 Final Sweep (Quiz + World/You Restructure)
+
+**Agent:** ep · **Scope:** whole `kaizi/` project, focused on the v3 personalization quiz
++ World/You restructure that backend2, mobile, and the Confidence Engineer just shipped
+· **Date:** 2026-07-12
+
+## Verdict
+
+This is the final sweep before the v3 phase (onboarding quiz + World/You restructure) is
+reported to the founder as complete. Independently re-verified every number the
+Confidence Engineer reported — all matched exactly, nothing re-trusted blindly. Chased
+down all five flagged gaps to a real decision (two fixed, three assessed and confirmed
+non-issues with written reasoning). Found and fixed one real security/cost gap during the
+scoped security pass that nobody had flagged yet. Swept every design doc for staleness and
+updated six of them. Zero orphaned TODO/FIXME/XXX/HACK anywhere in the tree. Both packages
+100% green after every change.
+
+## 1. Independent re-verification (not re-trusted from the confidence report)
+
+| Check | Result | Matches confidence-report-v3.md? |
+|---|---|---|
+| `kaizi/server` `tsc --noEmit` | clean | Yes |
+| `kaizi/server` `npm test` | 167/167 + 8 skipped (175) | Yes, exactly |
+| `kaizi/server` `TEST_REAL_DB=1 npm run test:integration` | 8/8 | Yes, exactly |
+| `kaizi/app` `tsc --noEmit` | clean | Yes |
+| `kaizi/app` `npm test` | 81/81 | Yes, exactly |
+| `kaizi/app` `expo export --platform ios` | clean, 1138 modules, `.hbc` bundle | Yes |
+| `kaizi/app` `expo export --platform android` | clean, 1136 modules, `.hbc` bundle | Yes |
+
+All run fresh in this pass, against the same real Postgres 16 instance (already running at
+session start), not inferred from anyone's self-report.
+
+## 2. The five flagged gaps — each chased to a real decision
+
+1. **WorldScreen/YouScreen fixed padding instead of `useSafeAreaInsets` — FIXED.**
+   Confirmed the gap was real: `grep` across all screens showed only `WelcomeScreen.tsx`
+   using the hook directly, but the shared `OnboardingScreen.tsx` wrapper (used by every
+   other onboarding screen) does too — so "onboarding screens do this correctly" was
+   accurate, and World/You genuinely didn't. Added `useSafeAreaInsets` to both
+   `WorldScreen.tsx` (status bar top padding, chat FAB bottom offset, home-UI bottom
+   padding; also switched `statusBar`'s fixed `height: 54` to `minHeight: 54` since the
+   larger inset-aware padding would otherwise clip content) and `YouScreen.tsx` (header
+   top padding, scroll-view bottom padding) — same pattern as `OnboardingScreen.tsx`'s
+   `Math.max(insets.bottom, 12) + N` convention. Typecheck clean, 81/81 app tests still
+   pass (no test covered visual padding, expected).
+2. **You→Progress showing only real data — ASSESSED, not a bug, no fix needed.** Read
+   the actual rendered UI, not just the code comment describing it: `ProgressPanel`
+   shows today's kept/total and active-goal count, then an explicit `noteCard` stating
+   plainly "Consistency %, total Growth, and the monthly chart need a dedicated stats
+   endpoint that isn't built yet." That's an honest minimal state, not a confusing one —
+   nothing implies more data exists than does.
+3. **Settings panel rows being display-only — ASSESSED, not a bug, no fix needed.**
+   Same check: `SettingsPanel` rows have no `onPress` at all (not a dead-looking button —
+   structurally just informational `View`s), and an explicit note reads "These rows are
+   informational for now — export/reset/subscription-management endpoints aren't built
+   yet." Not misleading.
+4. **Zone-unlock is goal-based, not the streak ratchet from world-spec.md #6 —
+   ASSESSED, accepted v1 simplification, full reasoning documented, not built.** Did not
+   build the ratchet table (correctly out of scope — a shared design decision with
+   ep-notes Gap 2, per both `app-restructure-v3.md` §5 and backend2's own determination).
+   Gut-checked whether the current mechanism is actually broken/misleading: it isn't —
+   the locked-zone UI copy ("Unlocks when you pick Fitness or Discipline as a goal")
+   accurately describes the real (simpler) mechanism rather than promising a streak that
+   doesn't exist, and because goals aren't editable post-onboarding, the unlock is
+   trivially monotonic (can't regress) even without a ratchet table. Full reasoning
+   trail in `ep-notes.md`'s 2026-07-12 entry, including why a quick partial-streak guard
+   would actually be *worse* (it would reintroduce the exact regression risk Gap 2 exists
+   to prevent).
+5. **Stale "Not wired into app.ts/index.ts" doc comment — FIXED (trivial).** All four
+   route files (`chat.ts`, `customization.ts`, `intentions.ts`, `journal.ts`) had a
+   leftover header comment pointing at a `PENDING_INTEGRATION.md` that no longer exists
+   (deleted once wired, per the previous EP pass). Replaced with an accurate one-liner
+   ("Mounted in app.ts alongside the onboarding/verify/sms routers.").
+
+## 3. Security addendum — scoped review of the two new routes + World screen input
+
+Full detail in `security-review.md`'s new "v3 addendum (2026-07-12, EP final sweep)"
+section. Summary:
+
+- **`POST /api/onboarding/quiz`**: clean. Same auth/rate-limit posture as `/profile`.
+  Every answer field is a strict `z.enum` (no free text anywhere in the quiz) — verified
+  there is no injection surface into the JSONB store or into the Claude system prompt via
+  the quiz specifically (unlike the pre-existing, unchanged `identityWhy` free-text
+  field, which was already a prompt-input surface before this pass).
+- **`POST /api/intentions/generate` — real gap found and fixed.** No per-day
+  idempotency guard: calling it twice for the same user/day triggered two full-price
+  `claude-opus-4-8` calls and two sets of duplicate `source:"companion"` rows, with no
+  protection beyond the generic 30/min/IP world rate limiter shared across all four
+  world routers (meaning an attacker could spend the entire 30/min budget on this one
+  paid-API route alone). Unlike Twilio's `/verify/start` (which got a per-phone daily
+  cap *and* a global circuit breaker in the M-1 fix), `/generate` had neither, despite
+  calling the more expensive of the two AI call paths (`max_tokens: 1024` vs. chat's
+  `300`). **Fixed:** the route now checks for existing intentions on the requested date
+  first and short-circuits (`200`, no new rows, no API call) if any exist — caps real
+  spend to at most one generation per user per day, matching the usage pattern
+  `personalization-spec.md` §3.3 already assumed. Verified with 3 new regression tests
+  (`test/world/intentions-source-and-generate.test.ts`) plus a live curl walkthrough
+  against the real server + real Postgres (first call 201/3 rows, second call 200 with
+  the *same* 3 IDs, `GET /` still showing 3 not 6 — not just asserted in a test, watched
+  happen against a real database).
+- **World screens' input handling**: clean. `IntentionsSheet`'s manual-add fields cap
+  client-side (60/80 chars) well under the server's caps (200/200); `ReflectionSheet`/
+  `ChatSheet` have no client-side cap but are backstopped by server-side Zod limits
+  (4000/2000 chars) with no bypass path; React Native's `<Text>` has no markup-injection
+  surface by platform design.
+
+## 4. Full project consistency sweep — six docs updated
+
+Grepped every doc for "not yet started"/"not yet built"/"pending"/"no consuming UI" and
+fixed every hit that was now false (left the ones that are still accurate, e.g.
+`world-build-plan.md`'s note that memory-echo *retrieval* still isn't built — only
+storage is):
+
+- **`docs/design/world-spec.md`** — status section no longer says Expo screens
+  consuming the backend "are not yet started"; now points at `app-restructure-v3.md`
+  and `confidence-report-v3.md`, and explains the goal-based (not streak-based) zone
+  gating with a pointer to `ep-notes.md`'s reasoning.
+- **`docs/design/world-build-plan.md`** — "Mobile screens are still queued" corrected
+  throughout (status line, "New app screens" section retitled from "queued, not yet
+  built" to "built", sequencing checklist steps 4/5 marked done).
+- **`docs/DEPLOYMENT-READINESS.md`** — the entire "Blocked on the pending app
+  restructure" section (which said the app was onboarding-only and gated production
+  builds on a redesign that's now shipped) rewritten to reflect what's actually still
+  open: no real-device/simulator verification has ever happened, and the credential/
+  account gaps are unchanged — explicitly distinguished from the restructure question,
+  which is resolved.
+- **`kaizi/app/DEPLOYMENT.md`** — the "do not build until the redesign is approved"
+  gate updated to reflect the redesign being built; recommends an internal-testing build
+  as the reasonable next step instead of a flat hold.
+- **`docs/architecture.md`** — this was the stalest doc in the tree: still titled
+  "Architecture (Onboarding MVP)," still showed a 7-screen/4-endpoint system diagram, and
+  **incorrectly stated CORS was configured** (it was fully removed in the M-4 security
+  fix, 2026-07-12 prior pass) — a real factual error, not just a staleness issue. Rewrote
+  the intro, system diagram, API surface table (added quiz + `/generate`, corrected the
+  world-route rate-limit description to reflect it's one *shared* 30/min/IP budget across
+  all four world routers, not 30/min each), and security notes section.
+- **`kaizi/README.md`, `kaizi/server/README.md`, `kaizi/app/README.md`** — root README's
+  phase description, screen count (7→8), and terminology ("promises"→"intentions", per
+  the founder's already-made 2026-07-11 decision that the doc hadn't caught up to) all
+  updated; server README gained full `/api/onboarding/quiz` and
+  `/api/intentions/generate` documentation (every example curl in the new quiz section
+  was run live against the real server before being written down — verified `201` on
+  first submit); app README rewritten from "onboarding only, seven screens" (both false)
+  to describe both shipped phases, with the known-deviations list extended to include the
+  three assessed-not-fixed items from section 2 above plus the never-visually-verified
+  caveat.
+
+## 5. TODO/FIXME/XXX/HACK sweep
+
+`grep -rn "TODO\|FIXME\|XXX\|HACK"` across `server/src`, `server/test`, `app/src`,
+`app/test`, and `docs` (excluding `node_modules`/`dist`): zero orphaned markers. The only
+`XXX` hits are a phone-formatting test description and a doc comment about phone-number
+grouping (`(XXX) XXX-XXXX`) — not TODO markers. Also checked for `@todo`, "not
+implemented," "unimplemented," and stray "WIP" markers in source — none found.
+
+## 6. Final verification evidence (after every fix above)
+
+- **Server:** `tsc --noEmit` clean; `npm test` — **170/170 passing** (8 correctly
+  skipped, 178 total — the 3 new idempotency-guard tests added to the previous 175);
+  `TEST_REAL_DB=1 npm run test:integration` — **8/8 passing**; `npm run build`
+  (production `tsc` compile) clean.
+- **App:** `tsc --noEmit` clean; `npm test` — **81/81 passing** (unchanged — the
+  safe-area fix has no unit-testable surface); `npx expo export --platform ios` and
+  `--platform android` both bundle cleanly.
+- **Live e2e evidence, not just tests:** ran the new quiz doc example against the real
+  server + real Postgres (201, matches documented response exactly); ran the
+  `/generate` idempotency fix twice against the real server + real Postgres (201 then
+  200, identical IDs, `GET /` confirming no duplicate rows).
+- `git status` clean at the end of this pass except the files listed below, all
+  intentional.
+
+## Files touched this session
+
+Server: `src/routes/intentions.ts` (idempotency guard), `src/routes/chat.ts`,
+`src/routes/customization.ts`, `src/routes/journal.ts` (stale doc comment),
+`test/world/intentions-source-and-generate.test.ts` (+3 tests), `README.md`.
+App: `src/screens/WorldScreen.tsx`, `src/screens/YouScreen.tsx` (safe-area insets),
+`README.md`, `DEPLOYMENT.md`.
+Docs: `README.md`, `docs/architecture.md`, `docs/security-review.md` (v3 addendum),
+`docs/design/world-spec.md`, `docs/design/world-build-plan.md`,
+`docs/DEPLOYMENT-READINESS.md`, `docs/ep-notes.md` (new 2026-07-12 section), this file.
+
+## What's still genuinely open (accepted, not fixed here)
+
+- **Never visually verified on a real device or simulator** — true of every pass to
+  date, this one included; no device/simulator has ever been available in any sandbox
+  this project has run in.
+- **The streak-milestone/zone ratchet table** (ep-notes Gap 2, extended to per-goal
+  zones) — a real future feature, correctly not built here or in the passes before it;
+  see section 2.4 above and `ep-notes.md` for the full reasoning on why the current
+  simplification is safe to ship without it.
+- **`world-spec.md` #5 (SMS mirrors the living world)** — still blocked on the same
+  "current activity" derivation gap flagged since the first `ep-notes.md` entry; untouched
+  by this pass, not part of what shipped.
+- **Credential/account/legal blockers in `DEPLOYMENT-READINESS.md`** — unchanged by this
+  pass; these were never a code problem.
+
+This closes out the v3 build phase. Every flagged gap has a real decision attached to it
+(fixed or explicitly accepted with written reasoning), the one previously-unflagged real
+gap this pass found (`/generate`'s cost/idempotency issue) is fixed and verified live, and
+every doc in the tree that described the restructure as pending now describes it as built.

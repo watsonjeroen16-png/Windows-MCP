@@ -84,5 +84,11 @@ Spec approved. Motion & Environment Designer's animation-quality pass on
 customization, and journal is built and wired (see `world-build-plan.md`) — but proposals
 #5 (SMS mirrors the living world) and #6 (streak-driven world states) are not yet
 implementable as specced because the backend doesn't track a "current activity" or a
-persisted world-state/streak-milestone; see `kaizi/docs/ep-notes.md`. Expo screens
-consuming the new backend surface are **not yet started**.
+persisted world-state/streak-milestone; see `kaizi/docs/ep-notes.md`. **Update
+2026-07-12:** Expo screens consuming the backend surface are now built — see
+`app-restructure-v3.md` for the shipped World/You restructure (WorldScreen, YouScreen,
+ZoneBackground, Chat/Intentions/Reflection sheets), verified end-to-end in
+`kaizi/docs/confidence-report-v3.md`. Zone unlocking is goal-based (a user's onboarding
+`goals[]`), not the streak-ratchet mechanic #6 describes — see `ep-notes.md`'s
+2026-07-12 entry for the reasoning on why that's an accepted v1 simplification, not a
+bug, until the streak-milestone table (Gap 2) is built.

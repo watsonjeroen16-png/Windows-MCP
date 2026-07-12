@@ -91,19 +91,27 @@ are each rate-limited per IP (5/min); `/api/verify/*` additionally has a
 per-phone guard (5/min) and a per-phone daily cap (5/day) on `/start`, plus a
 global circuit breaker (300 sends/hour, shared with `/api/sms/welcome`) that
 trips on abnormal aggregate volume. The Companion World routes
-(`/api/intentions`, `/api/chat`, `/api/customization`, `/api/journal`) are
-each rate-limited per IP too (30/min by default). Any of these return
-`429 {"error":"rate_limited"}` or `503 {"error":"circuit_open"}` when tripped.
+(`/api/intentions` incl. `/generate`, `/api/chat`, `/api/customization`,
+`/api/journal`) share **one** per-IP limiter instance (30/min by default,
+aggregate across all four, not 30/min each) — `/api/chat` and
+`/api/intentions/generate` both call the real (paid) Claude API per request,
+so this budget is real-money-relevant, not just abuse-relevant.
+`/api/intentions/generate` additionally caps real spend to one Claude call
+per user per calendar day via an idempotency guard (see that endpoint's docs
+below). Any of these return `429 {"error":"rate_limited"}` or
+`503 {"error":"circuit_open"}` when tripped.
 
 ### Authentication
 
-`POST /api/onboarding/profile` and `POST /api/sms/welcome` require a session
-token: `Authorization: Bearer <token>`. The token is issued by
+Every endpoint under `/api/onboarding/*` (`profile`, `quiz`), `/api/sms/*`,
+and all four Companion World route groups (`/api/intentions` incl.
+`/generate`, `/api/chat`, `/api/customization`, `/api/journal`) require a
+session token: `Authorization: Bearer <token>`. The token is issued by
 `POST /api/verify/check` on approval, is bound to the verified phone, and
-expires after 30 minutes. These two endpoints derive the phone from the
+expires after 30 minutes. These endpoints derive the phone from the
 token — **not** from the request body — so a bare phone number is no longer
-sufficient to read or write someone else's onboarding data. A missing,
-malformed, forged, or expired token gets `401 {"error":"unauthorized"}`.
+sufficient to read or write someone else's data. A missing, malformed,
+forged, or expired token gets `401 {"error":"unauthorized"}`.
 
 ### `GET /health`
 
@@ -174,6 +182,39 @@ Enums:
 - `environment`: `cyber_city | modern_apartment | forest_village | mountain_retreat | dojo | coastal_paradise | fantasy_kingdom | space_colony | japanese_garden | training_campus | entrepreneur_district | sky_islands`
 - `identityWhy`: 10–280 chars, trimmed
 
+### `POST /api/onboarding/quiz`
+
+Persist the 10-question onboarding personalization quiz
+(`docs/design/personalization-spec.md` §1), or record a full skip. Same
+auth/verification requirements as `/profile` (`401`/`404 phone_not_found`/
+`409 phone_not_verified`). Body: `{ answers: {...all 10 fields optional...},
+skippedEntirely?: boolean }` — every answer field is a strict `z.enum` (no
+free text anywhere in the quiz), so there's no injection surface into the
+`answers` JSONB column. Upsert semantics matching `/profile`: re-posting
+**replaces** the whole `answers` object (not a merge) and updates the same
+row (`200`, `created:false`); first save is `201`.
+
+```bash
+curl -X POST http://localhost:4000/api/onboarding/quiz \
+  -H 'content-type: application/json' \
+  -H 'Authorization: Bearer <token from verify/check>' \
+  -d '{
+    "answers": {
+      "focusGoal": "fitness",
+      "startingPoint": "restarting",
+      "obstacle": "motivation_dips",
+      "supportStyle": "direct",
+      "availability": ["early_morning", "evening"],
+      "motivationStyle": "visible_progress",
+      "pastAttempts": "tried_apps_didnt_stick",
+      "confidence": "fairly",
+      "rhythm": "flexible",
+      "ninetyDayVision": "measurable_result"
+    }
+  }'
+# 201 {"ok":true,"userId":"<uuid>","created":true,"skippedEntirely":false}
+```
+
 ### `POST /api/sms/welcome`
 
 Render the personality template (verbatim from the design spec,
@@ -215,9 +256,36 @@ Daily habit/commitment instances (the renamed "Promises" mechanic). `GET`
 takes an optional `?date=YYYY-MM-DD` (defaults to today) and returns that
 day's intentions for the authenticated user. `POST` creates one (`title`,
 optional `subtitle`, `rewardGrowth` 0–10000, `scheduledFor` YYYY-MM-DD) with
-status `pending`. `POST /:id/keep` atomically transitions `pending -> kept`
-(claim-or-fail, same pattern as `markWelcomed`) — `409 not_keepable` if the
-intention is missing, not owned by the caller, or already kept/missed.
+status `pending` and `source: "user"` (DB column default). `POST /:id/keep`
+atomically transitions `pending -> kept` (claim-or-fail, same pattern as
+`markWelcomed`) — `409 not_keepable` if the intention is missing, not owned
+by the caller, or already kept/missed.
+
+### `POST /api/intentions/generate`
+
+AI-generate personalized intentions for a day (`docs/design/
+personalization-spec.md` §3.2) — calls the real Claude API
+(`claude-opus-4-8`, same as chat) via `src/services/intention-generator.ts`,
+structured-output JSON matching the intention shape, built from the user's
+goals + identity "why" + quiz-derived digest (mock mode: a goal-relevant
+canned pool when `ANTHROPIC_API_KEY` is unset). Persists each result with
+`source: "companion"`. Body: `{ count?: 1-5, scheduledFor?: YYYY-MM-DD }`,
+both optional (`count` defaults to 3, `scheduledFor` to today).
+
+**Idempotent per user/day (2026-07-12 security fix):** if intentions already
+exist for the requested `scheduledFor` (of either source), this returns them
+as-is (`200`, no new rows, no Claude call) instead of generating again —
+caps real API spend to at most one generation per user per day and prevents
+duplicate rows from a repeat call. First generation for a day is `201`.
+
+```bash
+curl -X POST http://localhost:4000/api/intentions/generate \
+  -H 'content-type: application/json' \
+  -H 'Authorization: Bearer <token from verify/check>' \
+  -d '{}'
+# 201 {"intentions":[{...,"source":"companion"} x3],"scheduledFor":"2026-07-12"}
+# calling again same day -> 200, same rows returned, nothing new created
+```
 
 ### `GET /api/chat` / `POST /api/chat`
 
@@ -227,10 +295,12 @@ message, calls `getCompanionReply` (`src/services/claude-chat.ts`) — real
 `claude-opus-4-8` via `@anthropic-ai/sdk` when `ANTHROPIC_API_KEY` is set, a
 small in-voice canned-reply pool per personality otherwise (mock mode, mirrors
 `services/twilio.ts`) — persists the reply, and returns both messages. The
-system prompt is built from the user's active personality/species
-(post-onboarding customization if set, else the onboarding choice) plus a
-compact memory digest (goals, identity "why", today's unkept intentions); a
-live API error degrades to the mock reply rather than surfacing a 500.
+system prompt is **three cache-breakpointed blocks** as of
+`personalization-spec.md` §3.3: (1) stable companion identity/voice, (2) a
+quiz-derived profile digest (its own cache breakpoint, only present when the
+user has quiz data on file), (3) a volatile memory digest (goals, identity
+"why", today's unkept intentions, never cached). A live API error degrades to
+the mock reply rather than surfacing a 500.
 
 ### `GET /api/customization` / `PUT /api/customization`
 

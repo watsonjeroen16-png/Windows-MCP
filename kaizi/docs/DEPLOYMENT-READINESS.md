@@ -1,16 +1,27 @@
 # Kaizi Deployment Readiness
 
 One-page summary of what's ready to ship today, what's blocked purely on
-founder-provided credentials/accounts, and what's blocked on the pending app
-restructure. See `kaizi/docs/GETTING-CREDENTIALS.md` for beginner-friendly,
-step-by-step instructions for every credential listed here.
+founder-provided credentials/accounts, and what's still blocked on
+verification the sandbox can't perform. See `kaizi/docs/GETTING-CREDENTIALS.md`
+for beginner-friendly, step-by-step instructions for every credential listed
+here.
+
+**Update 2026-07-12:** the app restructure that this doc previously described
+as "pending" is now built and verified — the World/You restructure
+(`app-restructure-v3.md`) plus the personalization quiz
+(`personalization-spec.md`) shipped, and a Confidence Engineer pass confirmed
+it live end-to-end against real Postgres (`kaizi/docs/confidence-report-v3.md`:
+zero functional bugs, server 175/175, app 81/81, both `expo export` targets
+clean). The app is no longer onboarding-only — see "What changed 2026-07-12"
+below. This does **not** mean it's ready for a production store submission
+today: the credential/account gaps below are unchanged, and the app has still
+never been visually verified on a real device or simulator (see that section).
 
 ## Ready today
 
-**The backend is independently deployable right now.** It doesn't depend on
-the app restructure decision — Intentions, chat, customization, and journal
-are already built and tested server-side (see `kaizi/server/README.md`); only
-the Expo screens that consume them don't exist yet.
+**The backend is independently deployable right now.** Intentions, chat,
+customization, journal, the onboarding quiz, and AI-generated intentions are
+all built and tested server-side (see `kaizi/server/README.md`).
 
 - CI: `.github/workflows/kaizi-ci.yml` — runs server + app typecheck/test on
   every push/PR touching `kaizi/**`. Server job uses the in-memory test suite
@@ -61,30 +72,50 @@ Every credential the project needs, in one place (see
 None of these can be provisioned by an agent — they all require the
 founder's own identity, payment method, or account.
 
-## Blocked on the pending app restructure
+## What changed 2026-07-12 — the restructure is built
 
-**Do not run a production EAS build or submit to either app store until the
-Retention Architect's redesign is approved by the founder and the resulting
-screens are built.** The current app is onboarding-only (7 screens); the
-Retention Architect is actively redesigning the overall screen structure
-(collapsing into a World/You navigation model per the in-progress mockup) and
-producing that mockup for founder approval right now. Shipping the current
-screens to a store would be:
+The app restructure this doc used to gate a production build on is **done**:
+onboarding now includes a 10-question personalization quiz (step 4 of 8, per
+`personalization-spec.md` — screen-time opt-in was cut by the founder, so it's
+8 steps not 9), and onboarding hands off into the World/You restructure
+(`app-restructure-v3.md`) instead of ending with nowhere to go — `WorldScreen`
+(the app's only "home," zone travel strip, companion, chat FAB, intentions
+pouch) and `YouScreen` (Progress/Companion/Settings tabs), with Chat/
+Intentions/Reflection as contextual bottom sheets. This consumes the full
+backend surface (Intentions, chat, customization, journal, quiz,
+AI-generated intentions) live — verified end-to-end against real Postgres,
+zero functional bugs (`kaizi/docs/confidence-report-v3.md`).
 
-- Wasted engineering effort (a store-approved build of screens about to be
-  restructured has near-zero shelf life), and
-- A worse first impression than waiting, since the Companion World backend
-  (Intentions, chat, customization, journal) is already built and tested but
-  has **no consuming UI yet** — an app-store build today would ship
-  onboarding with nowhere for the relationship to continue except SMS, which
-  is intentional for the *current* MVP scope but not what the founder is
-  actually trying to launch.
+**Still genuinely open before a production store submission**, independent of
+the credentials table below:
 
-What's ready the moment the restructure is approved and built: `eas.json`
-build profiles, `kaizi/app/DEPLOYMENT.md` submission steps, and (once
-credentials in the table above are in hand) a clear path from `eas build
---profile production` to both stores with no further infrastructure work
-needed. The gate is purely a product/design decision, not a technical one.
+- **Never visually verified on a real device or simulator.** Every pass so
+  far (onboarding, then the v3 restructure) has verified `expo export`
+  bundles cleanly and that the TypeScript/unit-test logic is sound, but
+  nobody has watched the zone art, weather layers, sheet slide-up animation,
+  or safe-area layout render on an actual iOS/Android screen — this sandbox
+  has no device or simulator available. Recommend a real device smoke test
+  before the first production build, not just before store submission.
+- **Two self-disclosed, intentionally-minimal states** (both reassessed and
+  confirmed non-misleading by the 2026-07-12 EP pass, see `ep-notes.md`):
+  You → Progress only shows today's kept/total and active-goal count (an
+  explicit in-UI note explains the stats endpoint isn't built yet, rather
+  than fabricating numbers); Settings rows (export data, reset memory,
+  subscription) are display-only with an explicit in-UI note that the
+  underlying endpoints don't exist yet. Both are honest v1 states, not bugs —
+  worth building out (a real stats endpoint, real settings actions) as a
+  near-term follow-up, not a pre-launch blocker.
+- **Zone unlocking is goal-based, not streak-based.** A zone unlocks
+  immediately once a user picks its matching onboarding goal, not after
+  earning a 7-day streak as `world-spec.md` §6 originally envisioned — see
+  `ep-notes.md`'s 2026-07-12 entry for why this is judged an acceptable v1
+  simplification (it can't regress, since it's driven by an onboarding
+  choice that isn't currently editable) rather than a launch blocker.
+
+None of the above blocks shipping a build to internal testers (TestFlight
+internal / Play internal track) to get real device eyes on it — they block a
+confident **public** store submission, which was already gated on the
+credential/account items below regardless.
 
 ## Summary
 
@@ -93,7 +124,7 @@ needed. The gate is purely a product/design decision, not a technical one.
 | Server code | Done, tested, deployable today (needs founder credentials from the table above) |
 | Server CI/CD infra | Done (`kaizi-ci.yml`, `Dockerfile`, `docker-compose.yml`, `DEPLOYMENT.md`) |
 | Server hosting | Not provisioned — requires founder's Railway account |
-| Mobile app code | Onboarding-only; Companion World UI not started (separate from this deployment work) |
-| Mobile build infra | Done (`eas.json`, `DEPLOYMENT.md`) — **held**, do not ship a build yet |
+| Mobile app code | Onboarding + full World/You restructure built and verified (2026-07-12) — never visually verified on a real device/simulator |
+| Mobile build infra | Done (`eas.json`, `DEPLOYMENT.md`) — usable for internal-testing builds now; hold public store submission on the items above and below |
 | App store accounts | Not created — requires founder's Apple/Google accounts |
 | Legal/store content | Not started (privacy policy, listing copy/screenshots) |

@@ -142,3 +142,57 @@ describe("POST /api/intentions/generate — happy path (mock mode)", () => {
     expect(res.body.error).toBe("phone_not_found");
   });
 });
+
+describe("POST /api/intentions/generate — idempotency guard (cost control)", () => {
+  it("a second call for the same scheduledFor short-circuits: 200, no new rows, no duplicate generation", async () => {
+    const { app, db, sessionTokens } = makeWorldTestApp();
+    const auth = await verifiedAuthHeader(db, sessionTokens, PHONE);
+
+    const first = await request(app).post("/api/intentions/generate").set("Authorization", auth).send({});
+    expect(first.status).toBe(201);
+    expect(first.body.intentions).toHaveLength(3);
+
+    const second = await request(app).post("/api/intentions/generate").set("Authorization", auth).send({});
+    expect(second.status).toBe(200); // not 201 — nothing was created
+    expect(second.body.intentions).toHaveLength(3); // same rows returned, not doubled
+    expect(second.body.intentions.map((i: { id: string }) => i.id).sort()).toEqual(
+      first.body.intentions.map((i: { id: string }) => i.id).sort()
+    );
+
+    const list = await request(app).get("/api/intentions").set("Authorization", auth);
+    expect(list.body.intentions).toHaveLength(3); // not 6 — the second call did not append more rows
+  });
+
+  it("short-circuits even when the existing intentions for the day were user-authored, not companion-generated", async () => {
+    const { app, db, sessionTokens } = makeWorldTestApp();
+    const auth = await verifiedAuthHeader(db, sessionTokens, PHONE);
+    const today = new Date().toISOString().slice(0, 10);
+
+    await request(app)
+      .post("/api/intentions")
+      .set("Authorization", auth)
+      .send({ title: "Manually added", rewardGrowth: 5, scheduledFor: today });
+
+    const res = await request(app).post("/api/intentions/generate").set("Authorization", auth).send({});
+    expect(res.status).toBe(200);
+    expect(res.body.intentions).toHaveLength(1);
+    expect(res.body.intentions[0].source).toBe("user");
+  });
+
+  it("a different scheduledFor still generates normally (guard is per-date, not global)", async () => {
+    const { app, db, sessionTokens } = makeWorldTestApp();
+    const auth = await verifiedAuthHeader(db, sessionTokens, PHONE);
+
+    const first = await request(app)
+      .post("/api/intentions/generate")
+      .set("Authorization", auth)
+      .send({ scheduledFor: "2099-01-01" });
+    expect(first.status).toBe(201);
+
+    const second = await request(app)
+      .post("/api/intentions/generate")
+      .set("Authorization", auth)
+      .send({ scheduledFor: "2099-01-02" });
+    expect(second.status).toBe(201); // different date, not short-circuited
+  });
+});

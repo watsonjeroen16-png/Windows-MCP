@@ -12,6 +12,7 @@
  */
 import React, { useEffect, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { getIntentions, updateCustomization, type Intention } from "../api/client";
 import { COMPANIONS } from "../data/companions";
@@ -187,6 +188,7 @@ function SettingsPanel() {
 
 export function YouScreen() {
   const { state, dispatch } = useWorld();
+  const insets = useSafeAreaInsets();
 
   const tabs: { id: YouTab; label: string }[] = [
     { id: "progress", label: "Progress" },
@@ -196,7 +198,7 @@ export function YouScreen() {
 
   return (
     <View style={styles.root}>
-      <View style={styles.header}>
+      <View style={[styles.header, { paddingTop: insets.top + 8 }]}>
         <BackChevron onPress={() => dispatch({ kind: "navigate", screen: "world" })} />
         <Text style={styles.headerTitle}>You</Text>
         <View style={styles.headerSpacer} />
@@ -213,7 +215,10 @@ export function YouScreen() {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        contentContainerStyle={[styles.body, { paddingBottom: Math.max(insets.bottom, 12) + 60 }]}
+        showsVerticalScrollIndicator={false}
+      >
         {state.youTab === "progress" ? <ProgressPanel /> : null}
         {state.youTab === "companion" ? <CompanionPanel /> : null}
         {state.youTab === "settings" ? <SettingsPanel /> : null}

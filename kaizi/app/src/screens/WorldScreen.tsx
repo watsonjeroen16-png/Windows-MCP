@@ -9,6 +9,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import Animated, { interpolate, useAnimatedStyle } from "react-native-reanimated";
 import Svg, { Path } from "react-native-svg";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { generateIntentions, getIntentions, type Intention } from "../api/client";
 import { companionById } from "../data/companions";
@@ -96,6 +97,7 @@ function ZoneChip({
 
 export function WorldScreen() {
   const { state, dispatch } = useWorld();
+  const insets = useSafeAreaInsets();
   const [intentions, setIntentions] = useState<Intention[] | null>(null);
   const [lockedHint, setLockedHint] = useState<string | null>(null);
   // Guards against calling /generate more than once per mount — a day with
@@ -151,7 +153,7 @@ export function WorldScreen() {
     <View style={styles.root}>
       <ZoneBackground zone={state.zone} weather={state.weather} />
 
-      <View style={styles.statusBar}>
+      <View style={[styles.statusBar, { paddingTop: insets.top + 16 }]}>
         <Text style={styles.clock}>
           {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
         </Text>
@@ -194,7 +196,7 @@ export function WorldScreen() {
         accessibilityRole="button"
         accessibilityLabel="Open chat"
         onPress={() => dispatch({ kind: "open_sheet", sheet: "chat" })}
-        style={styles.chatFab}
+        style={[styles.chatFab, { bottom: 168 + insets.bottom }]}
       >
         <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.85)" strokeWidth={1.6}>
           <Path
@@ -205,7 +207,7 @@ export function WorldScreen() {
         </Svg>
       </Pressable>
 
-      <View style={styles.homeUi}>
+      <View style={[styles.homeUi, { paddingBottom: Math.max(insets.bottom, 12) + 40 }]}>
         <Pressable
           accessibilityRole="button"
           onPress={() => dispatch({ kind: "open_sheet", sheet: "reflection" })}
@@ -263,7 +265,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   statusBar: {
-    height: 54,
+    minHeight: 54,
     paddingHorizontal: 26,
     paddingTop: 16,
     flexDirection: "row",
