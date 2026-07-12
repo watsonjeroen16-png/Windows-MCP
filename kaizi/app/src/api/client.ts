@@ -54,6 +54,25 @@ const MOCK_LATENCY_MS = 450;
 /** Stand-in token for the offline mock path — never sent to any server. */
 const MOCK_OFFLINE_TOKEN = "offline-mock-token";
 
+/**
+ * True only inside a compiled release/production Metro bundle, where
+ * `__DEV__` is injected as the literal `false`. Any environment where the
+ * global isn't defined at all (a plain Node test run under vitest) or is
+ * `true` (an Expo dev/simulator build) is treated as non-release, so
+ * behavior there is unchanged — this only tightens behavior in real release
+ * builds. See docs/security-review.md L-5 (offline mock fabricates
+ * verification success) and L-6 (plain-HTTP base URL): a release build no
+ * longer silently completes onboarding into a void when the server is
+ * unreachable or misconfigured with a non-https URL — it surfaces a real
+ * failure instead of a fabricated success.
+ */
+const isReleaseBuild = typeof __DEV__ !== "undefined" && __DEV__ === false;
+
+/** Release builds must talk to an https origin — sending phone numbers and identity answers in the clear is never acceptable outside localhost dev. */
+function isSafeBaseUrl(url: string): boolean {
+  return !isReleaseBuild || url.startsWith("https://");
+}
+
 let warnedOffline = false;
 
 function warnOffline(reason: string): void {
@@ -76,6 +95,15 @@ async function post<TBody extends object>(
     warnOffline("EXPO_PUBLIC_API_URL is not set");
     return null;
   }
+  if (!isSafeBaseUrl(BASE_URL)) {
+    // Release build pointed at a non-https origin: refuse rather than send
+    // phone numbers / identity answers in the clear (L-6). Falls through to
+    // the same `null`-response path as an unreachable server; the caller
+    // decides (via isReleaseBuild) whether that means "offline mock" or "a
+    // real failure" — see each exported function below.
+    warnOffline(`${BASE_URL} is not https`);
+    return null;
+  }
   try {
     const headers: Record<string, string> = { "Content-Type": "application/json" };
     if (token) headers.Authorization = `Bearer ${token}`;
@@ -94,6 +122,11 @@ async function post<TBody extends object>(
 export async function verifyStart(request: VerifyStartRequest): Promise<ApiResult> {
   const response = await post("/api/verify/start", request);
   if (response === null) {
+    if (isReleaseBuild) {
+      // L-5: a release build never fabricates success — surface the real
+      // failure instead of pretending a verification code was sent.
+      return { ok: false, offline: false };
+    }
     await delay(MOCK_LATENCY_MS);
     return { ok: true, offline: true };
   }
@@ -112,6 +145,10 @@ export async function verifyStart(request: VerifyStartRequest): Promise<ApiResul
 export async function verifyCheck(request: VerifyCheckRequest): Promise<VerifyCheckResult> {
   const response = await post("/api/verify/check", request);
   if (response === null) {
+    if (isReleaseBuild) {
+      // L-5: no magic code path in a shipped build.
+      return { ok: false, offline: false, verified: false, token: null };
+    }
     await delay(MOCK_LATENCY_MS);
     const verified = request.code === MOCK_ACCEPTED_CODE;
     return { ok: true, offline: true, verified, token: verified ? MOCK_OFFLINE_TOKEN : null };
@@ -147,6 +184,9 @@ export async function submitProfile(
 ): Promise<ApiResult> {
   const response = await post("/api/onboarding/profile", request, token);
   if (response === null) {
+    if (isReleaseBuild) {
+      return { ok: false, offline: false };
+    }
     await delay(MOCK_LATENCY_MS);
     return { ok: true, offline: true };
   }
@@ -163,6 +203,9 @@ export async function submitProfile(
 export async function sendWelcomeSms(token: string): Promise<ApiResult> {
   const response = await post("/api/sms/welcome", {}, token);
   if (response === null) {
+    if (isReleaseBuild) {
+      return { ok: false, offline: false };
+    }
     await delay(MOCK_LATENCY_MS);
     return { ok: true, offline: true };
   }

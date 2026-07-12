@@ -135,3 +135,101 @@ describe("api/client — online (mocked fetch)", () => {
     expect(result.verified).toBe(true);
   });
 });
+
+// __DEV__ is a Metro-injected global, undefined in this plain-Node vitest
+// environment (see vitest.config.ts). These tests simulate a compiled
+// release build by stubbing it to the literal `false` Metro would inject —
+// see docs/security-review.md L-5 (offline mock fabricates verification
+// success) and L-6 (plain-HTTP base URL).
+describe("api/client — release build (__DEV__ === false)", () => {
+  const originalFetch = global.fetch;
+
+  function setDev(value: boolean | undefined): void {
+    (globalThis as unknown as { __DEV__?: boolean }).__DEV__ = value;
+  }
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.unstubAllEnvs();
+    setDev(undefined);
+  });
+
+  it("never fabricates success when the server is unreachable — surfaces a real failure instead", async () => {
+    vi.resetModules();
+    setDev(false);
+    // EXPO_PUBLIC_API_URL left unset — same "server unreachable" trigger as
+    // the offline-mock tests above, but this time in a release build.
+    const { verifyStart, verifyCheck, submitProfile, sendWelcomeSms } = await import("./client");
+
+    const start = await verifyStart({ phone: "+15551234567" });
+    expect(start.ok).toBe(false);
+    expect(start.offline).toBe(false);
+
+    const check = await verifyCheck({ phone: "+15551234567", code: "000000" });
+    expect(check.ok).toBe(false);
+    expect(check.offline).toBe(false);
+    expect(check.verified).toBe(false);
+    expect(check.token).toBeNull();
+
+    const profile = await submitProfile(
+      {
+        goals: ["fitness"],
+        identityWhy: "Because I want this for real.",
+        companion: "fox",
+        personality: "coach",
+        environment: "japanese_garden",
+        smsPrefs: { morning: true, evening: true },
+      },
+      "any-token"
+    );
+    expect(profile.ok).toBe(false);
+    expect(profile.offline).toBe(false);
+
+    const welcome = await sendWelcomeSms("any-token");
+    expect(welcome.ok).toBe(false);
+    expect(welcome.offline).toBe(false);
+  });
+
+  it("never fabricates success when fetch throws (network down)", async () => {
+    vi.resetModules();
+    setDev(false);
+    vi.stubEnv("EXPO_PUBLIC_API_URL", "https://api.kaizi.example");
+    global.fetch = vi.fn().mockRejectedValue(new Error("network down")) as unknown as typeof fetch;
+
+    const { verifyCheck } = await import("./client");
+    const result = await verifyCheck({ phone: "+15551234567", code: "000000" });
+    expect(result.ok).toBe(false);
+    expect(result.offline).toBe(false);
+    expect(result.verified).toBe(false);
+  });
+
+  it("rejects a non-https base URL without ever calling fetch (L-6)", async () => {
+    vi.resetModules();
+    setDev(false);
+    vi.stubEnv("EXPO_PUBLIC_API_URL", "http://api.kaizi.example");
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { verifyCheck } = await import("./client");
+    const result = await verifyCheck({ phone: "+15551234567", code: "000000" });
+    expect(result.ok).toBe(false);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("a real https server response still works normally in a release build", async () => {
+    vi.resetModules();
+    setDev(false);
+    vi.stubEnv("EXPO_PUBLIC_API_URL", "https://api.kaizi.example");
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "approved", verified: true, token: "real-token" }), {
+        status: 200,
+      })
+    ) as unknown as typeof fetch;
+
+    const { verifyCheck } = await import("./client");
+    const result = await verifyCheck({ phone: "+15551234567", code: "000000" });
+    expect(result.ok).toBe(true);
+    expect(result.verified).toBe(true);
+    expect(result.token).toBe("real-token");
+  });
+});
