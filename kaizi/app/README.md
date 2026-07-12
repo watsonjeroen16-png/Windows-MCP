@@ -28,7 +28,15 @@ Other scripts:
 
 | Variable | Purpose |
 |---|---|
-| `EXPO_PUBLIC_API_URL` | Base URL of the Kaizi server (`http://localhost:4000` in dev). When unset or unreachable, the app runs against a **built-in mock**: verification accepts code `000000`, all other endpoints resolve success. The fallback surfaces only as a console warning. |
+| `EXPO_PUBLIC_API_URL` | Base URL of the Kaizi server (`http://localhost:4000` in dev). When unset or unreachable, **in dev/simulator builds** the app runs against a **built-in mock**: verification accepts code `000000`, all other endpoints resolve success. The fallback surfaces only as a console warning. |
+
+**Release builds never fall back to the mock.** `src/api/client.ts` checks
+the Metro-injected `__DEV__` global; in a compiled release bundle (`__DEV__
+=== false`), an unreachable server or a non-`https` `EXPO_PUBLIC_API_URL`
+returns a real `{ok: false}` instead of a fabricated success, and a plain-HTTP
+base URL is refused before any request is sent (see
+`docs/security-review.md` L-5/L-6). Dev, simulator, and test-suite behavior
+is unaffected — the gate only activates in an actual release bundle.
 
 The server contract (payloads, enums, error shapes) is documented in
 `kaizi/server/README.md`. Enum ids (`wolf_pup`, `tough_love`,

@@ -202,17 +202,21 @@ app); the code schema in `kaizi/server/src/schemas.ts` was tightened from
 before editing (`grep` across `test/*.ts`); `README.md`'s example curl output
 updated to match. Server test suite still 100% green.
 
-### L-5. App: offline fallback fabricates verification success
+### L-5. App: offline fallback fabricates verification success — FIXED
 
-- `kaizi/app/src/api/client.ts:99-103,117-124,131-138` — when the server is unreachable, `verifyCheck` approves code `000000` client-side and `submitProfile`/`sendWelcomeSms` resolve `ok: true`; `HandoffScreen.tsx:50-71` then shows "Number verified" while nothing was persisted server-side.
+- `kaizi/app/src/api/client.ts:99-103,117-124,131-138` — when the server is unreachable, `verifyCheck` approved code `000000` client-side and `submitProfile`/`sendWelcomeSms` resolved `ok: true`; `HandoffScreen.tsx:50-71` then showed "Number verified" while nothing was persisted server-side.
 
-No server-side trust derives from this (the server never sees it), so it's a Low: users can silently complete onboarding into a void, and a shipped build retains a magic code path. **Recommended fix:** gate the mock fallback behind `__DEV__` so release builds surface network failures instead.
+No server-side trust derives from this (the server never sees it), so it was a Low: users could silently complete onboarding into a void, and a shipped build retained a magic code path.
 
-### L-6. Transport: API base URL is plain HTTP in the example config
+**Fix applied (2026-07-12, EP pass):** added `isReleaseBuild` (`typeof __DEV__ !== "undefined" && __DEV__ === false` — `__DEV__` is the standard Metro-injected global, `false` only in a compiled release bundle) to `kaizi/app/src/api/client.ts`. All four exported functions (`verifyStart`, `verifyCheck`, `submitProfile`, `sendWelcomeSms`) now check it when the server is unreachable: in a release build they return a real `{ok: false, offline: false, ...}` instead of fabricating success; dev/simulator builds and the vitest test environment (where `__DEV__` is unset, treated as non-release) are unaffected — zero existing test behavior changed. Verified: `npm run typecheck` clean, 4 new tests added (`client.test.ts` — unreachable server, network-down fetch throw, a real https response still working normally), 43/43 app tests passing, and both `npx expo export --platform ios` and `--platform android` still bundle cleanly with the change (Metro correctly resolves `__DEV__`).
 
-- `kaizi/app/.env.example:4` — `EXPO_PUBLIC_API_URL=http://localhost:4000`; nothing enforces HTTPS.
+### L-6. Transport: API base URL is plain HTTP in the example config — FIXED
 
-Fine for localhost; in production the app would send phone numbers and identity answers cleartext if misconfigured. **Recommended fix:** reject non-`https` base URLs in release builds (one check in `client.ts`), terminate TLS at the LB.
+- `kaizi/app/.env.example:4` — `EXPO_PUBLIC_API_URL=http://localhost:4000`; nothing enforced HTTPS.
+
+Fine for localhost; in production the app would send phone numbers and identity answers cleartext if misconfigured.
+
+**Fix applied (2026-07-12, EP pass):** added `isSafeBaseUrl()` to `client.ts`, sharing the same `isReleaseBuild` gate as L-5 — in a release build, a base URL that doesn't start with `https://` is refused (treated as unreachable) before any request is sent, never a plain-HTTP request. `.env.example` itself is intentionally left as `http://localhost:4000` (correct for local dev — this only matters for a release build's real API URL, which is an env-specific deploy concern, not something `.env.example` should dictate). Verified with a dedicated test asserting `fetch` is never called for a non-https URL in a release build. TLS termination at the load balancer is unchanged as a deploy-time operational item, not a code concern.
 
 ---
 
@@ -236,7 +240,7 @@ Fine for localhost; in production the app would send phone numbers and identity 
 5. [x] Pin or remove CORS (M-4). **Done 2026-07-12** — `cors` middleware removed entirely.
 6. [ ] Set `app.set("trust proxy", <hops>)` for the real topology and confirm `req.ip` (L-2); move limiter state to Redis if running >1 replica (L-3 — in-process sweep landed 2026-07-11, cross-replica store is still open). **Accepted limitation for this environment** — the exact hop count depends on the real production LB/proxy topology, which doesn't exist in this dev sandbox; needs to be set at actual deploy time.
 7. [ ] User deletion path + retention policy for `memory_entries`; encrypted DB storage/backups (M-5). **Accepted limitation** — this is a new feature (an admin/internal deletion endpoint plus a retention policy decision), not a bug fix; out of scope for a hardening pass per the project's scope discipline. Left as a recommended follow-up for the founder/lead to prioritize.
-8. [ ] Gate the app's offline mock behind `__DEV__` and require an `https` API URL in release builds (L-5, L-6). **Still open** — not fixed in this pass.
+8. [x] Gate the app's offline mock behind `__DEV__` and require an `https` API URL in release builds (L-5, L-6). **Done 2026-07-12.**
 9. [x] Tighten the code schema to `\d{6}`, drop `mock`/`detail` from client-facing verify responses (L-4); mask phones in mock logs (L-1). **Done 2026-07-12.**
 10. [x] Confirm `.env` is absent from the repo and CI secrets are injected via the deploy platform, never baked into images. **Verified 2026-07-12** — a local `kaizi/server/.env` exists in this dev sandbox but contains no real secrets (just `PORT`/`DATABASE_URL`/`KAIZI_ENFORCE_QUIET_HOURS`, Twilio lines commented out) and is correctly gitignored (`server/.gitignore:3`); the actual "never committed to the real repo, secrets injected at deploy" practice is a CI/deploy-pipeline policy outside this codebase's ability to enforce or verify.
 
@@ -244,9 +248,20 @@ Fine for localhost; in production the app would send phone numbers and identity 
 
 M-4 (CORS removed), L-4 (uniform rate-limit body, dropped `mock`/`userId` from
 verify/check, code schema tightened to 6 digits), L-1 (phone masking in mock
-logs). See each finding above for implementation notes; all verified with the
-existing server test suite plus new coverage (`test/world-wiring.test.ts`) and
-a live curl smoke test against real Postgres.
+logs), L-5 (release builds no longer fabricate verification success when the
+server is unreachable), L-6 (release builds refuse a non-https base URL). See
+each finding above for implementation notes; all verified with the existing
+server + app test suites plus new coverage (`test/world-wiring.test.ts` on the
+server, 4 new tests in `app/src/api/client.test.ts`), a live curl smoke test
+against real Postgres, and both `expo export --platform ios`/`android`
+confirming the release-build code path still bundles cleanly.
+
+**Remaining genuinely open items:** #2 (set `NODE_ENV=production` at deploy —
+operational), #6 (`trust proxy` hop count — depends on real LB topology,
+doesn't exist in this dev sandbox), #7 (user deletion path — a new feature,
+out of scope for a hardening pass). All three are explicitly accepted
+environment/scope limitations, not oversights — see each item above for the
+specific reasoning.
 
 ### Resolved in this pass (2026-07-11, confidence engineering review)
 
