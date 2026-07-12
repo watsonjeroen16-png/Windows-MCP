@@ -465,17 +465,121 @@ body {
   .idle-breathe, .bloom, .cloud, .fog, .lantern-pool.lit, .pond-shimmer::before, .pond-shimmer::after { animation: none !important; }
   .parallax-layer, #groundLayer { transition: none !important; }
 }
+
+/* =========================================================================
+   V3 ADDITIONS — everything below is new for the World/You restructure.
+   Nothing above this point was touched, so v2's proven motion systems
+   (parallax, particles, lighting, companion motion) are inherited wholesale.
+   ========================================================================= */
+
+/* ---------- zone travel strip (World screen, goal-personalized garden) ---------- */
+.zone-strip {
+  position: relative; z-index: 30; display: flex; gap: 7px;
+  padding: 10px 16px 0; overflow-x: auto; scrollbar-width: none;
+}
+.zone-strip::-webkit-scrollbar { display: none; }
+.zone-chip {
+  flex-shrink: 0; display: flex; align-items: center; gap: 6px;
+  border-radius: 999px; padding: 7px 13px 7px 9px; cursor: pointer;
+  background: rgba(14,13,11,0.45); border: 0.5px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  transition: all 280ms ease; user-select: none;
+}
+.zone-chip .zdot { width: 6px; height: 6px; border-radius: 50%; background: rgba(240,235,224,0.3); flex-shrink: 0; transition: background 280ms ease; }
+.zone-chip .zlabel { font-family: var(--sans); font-size: 10px; letter-spacing: 0.04em; color: rgba(240,235,224,0.55); white-space: nowrap; transition: color 280ms ease; }
+.zone-chip.active { background: rgba(212,168,83,0.16); border-color: rgba(212,168,83,0.38); }
+.zone-chip.active .zdot { background: var(--gold); box-shadow: 0 0 6px 1px rgba(212,168,83,0.6); }
+.zone-chip.active .zlabel { color: var(--gold); }
+.zone-chip.locked { opacity: 0.55; cursor: pointer; }
+.zone-chip.locked .zlabel { color: rgba(240,235,224,0.32); }
+.zone-chip.locked svg.lock-ic { opacity: 0.5; }
+.zone-caption {
+  position: relative; z-index: 30; padding: 7px 16px 0;
+  font-family: var(--serif); font-style: italic; font-size: 11.5px; color: rgba(240,235,224,0.4);
+  min-height: 16px; transition: opacity 300ms ease;
+}
+.zone-hint-toast {
+  position: absolute; left: 50%; bottom: 268px; transform: translateX(-50%) translateY(6px);
+  z-index: 45; background: rgba(12,11,9,0.88); border: 0.5px solid rgba(212,168,83,0.25);
+  border-radius: 14px; padding: 10px 16px; max-width: 260px; text-align: center;
+  font-family: var(--serif); font-style: italic; font-size: 12.5px; color: var(--sand);
+  opacity: 0; pointer-events: none; transition: opacity 320ms ease, transform 320ms ease;
+}
+.zone-hint-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* World-level tint per zone: same art, re-lit — filter runs on the whole
+   .world node so the SVG scene, particles and companion all shift together. */
+#world { transition: filter 900ms ease; }
+.zone-training #world { filter: saturate(1.18) hue-rotate(-14deg) brightness(1.06) contrast(1.04); }
+.zone-training .tint { background: rgba(190,90,40,0.09) !important; }
+
+/* ---------- weather layer (ephemeral, independent of streak/season) ---------- */
+.weather-btn {
+  width: 34px; height: 34px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: transform 300ms ease;
+}
+.weather-btn:active { transform: scale(0.9); }
+.rain-layer, .mist-layer { position: absolute; inset: 0; pointer-events: none; z-index: 6; opacity: 0; transition: opacity 900ms ease; }
+.weather-rain .rain-layer { opacity: 0.55; }
+.weather-mist .mist-layer { opacity: 0.7; }
+.rain-drop {
+  position: absolute; top: -30px; width: 1px; height: 34px;
+  background: linear-gradient(180deg, transparent, rgba(200,215,225,0.5));
+  animation: rain-fall linear infinite;
+}
+.mist-layer {
+  background: linear-gradient(180deg, rgba(180,190,195,0.03) 0%, rgba(180,195,205,0.10) 45%, rgba(160,175,185,0.06) 70%, transparent 100%);
+  animation: fog-drift 22s ease-in-out infinite alternate;
+}
+@keyframes rain-fall { 0% { transform: translateY(0); opacity: 0; } 10% { opacity: 0.8; } 100% { transform: translateY(860px); opacity: 0.2; } }
+
+/* ---------- "You" avatar chip (World status bar → You screen) ---------- */
+.you-chip {
+  width: 34px; height: 34px; border-radius: 50%; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; cursor: pointer;
+  transition: transform 250ms ease; flex-shrink: 0;
+}
+.you-chip:active { transform: scale(0.9); }
+.status-bar-right { display: flex; align-items: center; gap: 8px; }
+
+/* ---------- Intentions pouch (compact widget on World; tap opens sheet, Keep stays one-tap) ---------- */
+.pwidget { cursor: pointer; }
+
+/* ---------- contextual Reflection surfacing (evening-only pill, not a nav item) ---------- */
+.reflect-pill {
+  align-self: flex-start; display: flex; align-items: center; gap: 7px;
+  border-radius: 999px; padding: 7px 13px 7px 11px; cursor: pointer;
+  font-size: 10.5px; letter-spacing: 0.04em; color: var(--sand);
+  font-family: var(--sans); max-height: 0; opacity: 0; overflow: hidden;
+  transition: all 420ms ease; border: 0.5px solid transparent;
+}
+.reflect-pill.visible { max-height: 40px; opacity: 1; margin-top: 2px; background: rgba(212,168,83,0.08); border-color: rgba(212,168,83,0.2); padding-top: 7px; padding-bottom: 7px; }
+
+/* ---------- You screen: segmented tabs (Progress / Companion / Settings) ---------- */
+.you-tabs { display: flex; gap: 6px; padding: 4px 24px 14px; position: relative; z-index: 5; flex-shrink: 0; }
+.you-tab {
+  flex: 1; text-align: center; padding: 9px 4px; border-radius: 12px; cursor: pointer;
+  font-family: var(--sans); font-size: 10.5px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: rgba(240,235,224,0.4); background: rgba(255,255,255,0.03); border: 0.5px solid rgba(255,255,255,0.07);
+  transition: all 250ms ease;
+}
+.you-tab.active { color: var(--gold); background: rgba(212,168,83,0.12); border-color: rgba(212,168,83,0.28); }
+.you-panel { display: none; }
+.you-panel.active { display: block; }
+
+/* ---------- 2-item nav: same .nav-pill element, NAV array now has 2 entries ---------- */
 </style>
 </head>
 <body>
 
 <div class="chips">
   <button class="chip" id="btn-welcome" onclick="go('welcome')">Welcome</button>
-  <button class="chip on" id="btn-home" onclick="go('home')">Home · World</button>
-  <button class="chip" id="btn-promises" onclick="go('promises')">Promises</button>
-  <button class="chip" id="btn-journey" onclick="go('journey')">Journey</button>
+  <button class="chip on" id="btn-home" onclick="go('home')">World</button>
   <button class="chip" id="btn-identity" onclick="go('identity')">You</button>
-  <button class="chip" id="btn-reflection" onclick="go('reflection')">Reflection</button>
+  <button class="chip" onclick="openIntentions()">Open Intentions sheet</button>
+  <button class="chip" onclick="openReflection()">Open Reflection sheet</button>
+  <button class="chip" onclick="openChat()">Open Chat sheet</button>
 </div>
 
 <!-- world-spec demo controls: proposals #1 (presence-aware return), #2 (idle speech), #6 (streak milestones) -->
