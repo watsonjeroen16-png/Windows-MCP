@@ -1,9 +1,14 @@
 # Kaizi — Personalization Spec: Onboarding Quiz, Screen-Time Opt-In, and AI-Generated Intentions
 
-Author: AI Engineer / Product · Status: **planning only, not approved** — this document is what the
-founder reviews to approve or redirect the work. Nothing here has been built; no onboarding screen,
-server route, or migration described below exists yet. Do not build against this doc without an
-explicit go-ahead.
+Author: AI Engineer / Product · Status: **§1 (quiz) approved for build 2026-07-12. §2 (screen-time
+opt-in) CUT by founder decision, same date — do not build any part of §2, and do not persist or
+reference screen-time data in §3's intention-generation pipeline.** §3 applies only to the quiz-derived
+digest; every screen-time-digest reference in §3 is void.
+
+Founder's verbatim call-out: *"We can take the screen time out."* No reason given, no further
+discussion needed — this is a scope cut, not an open question. If phone-usage-aware personalization is
+wanted later, it re-enters as a new request against §2.3's still-real iOS platform constraint, not a
+resumption of this doc.
 
 Founder's verbatim request: *"i want the companion to be able to track data throughout the phone if
 the user selects allow in the onboarding and in the onboarding you take a small 10 question quiz on
@@ -252,7 +257,12 @@ CREATE TABLE IF NOT EXISTS onboarding_quiz_responses (
 
 ---
 
-## 2. Screen-time opt-in permission
+## 2. Screen-time opt-in permission — CUT, 2026-07-12 (do not build)
+
+**This entire section is void.** The founder cut this feature outright after reviewing the mockup;
+none of §2.1–2.5 below should be built, and no onboarding screen for it exists or should be added.
+Left in place only as a historical record of the design work and the platform-feasibility research in
+§2.3, in case phone-usage-aware personalization is revisited later as a fresh request.
 
 ### 2.1 What the consent screen says (plain language, no dark patterns)
 
@@ -558,7 +568,7 @@ opposite of what this whole feature is for.
 
 ## Status
 
-Planning only. Not approved. No onboarding Expo screen, server route, or migration described in this
-document has been written. This spec is the artifact for founder review — approve, redirect, or
-descope (most likely candidate: the iOS screen-time question in §2.3) before any implementation work
-begins.
+**Approved for build 2026-07-12, with §2 (screen-time opt-in) cut entirely by founder decision.**
+Build §1 (the 10-question quiz) and the quiz-only half of §3 (intention-generation digest, minus every
+screen-time reference). Do not build anything in §2. Open questions #2–4 in §4 remain live for the
+quiz itself; #1 (the iOS screen-time question) is moot now that §2 is cut.
