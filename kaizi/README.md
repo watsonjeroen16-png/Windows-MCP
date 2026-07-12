@@ -85,6 +85,7 @@ cd kaizi/app
 npm install
 npm start                    # Expo dev server; press i / a or scan QR
 npm run typecheck            # tsc --noEmit
+npm test                     # pure-logic unit tests (reducer, validators, formatters)
 ```
 
 Set `EXPO_PUBLIC_API_URL` (see `kaizi/app/.env.example`) to point at the server.
