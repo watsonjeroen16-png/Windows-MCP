@@ -1048,17 +1048,35 @@ body {
     <div id="speech"></div>
     </div><!-- /#groundLayer -->
     <div class="tint"></div>
+    <!-- weather layer (proposal §4.3): ephemeral, independent of the streak-driven season above -->
+    <div class="rain-layer" id="rainLayer"></div>
+    <div class="mist-layer"></div>
   </div>
+  <div class="zone-hint-toast" id="zoneHint"></div>
 
   <!-- overlaid UI -->
   <div class="status-bar">
     <div class="time" id="clockHome">21:30</div>
-    <div class="tod-btn glass" onclick="cycleTod()" title="Change time of day">
-      <svg id="todIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.75)" stroke-width="1.6" stroke-linecap="round">
-        <path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>
-      </svg>
+    <div class="status-bar-right">
+      <div class="weather-btn glass" onclick="cycleWeather()" title="Weather (demo)">
+        <svg id="weatherIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.75)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17.5 19a4.5 4.5 0 000-9 6 6 0 00-11.4-1.5A4.5 4.5 0 007 19h10.5z"/>
+        </svg>
+      </div>
+      <div class="tod-btn glass" onclick="cycleTod()" title="Change time of day">
+        <svg id="todIcon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.75)" stroke-width="1.6" stroke-linecap="round">
+          <path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/>
+        </svg>
+      </div>
+      <div class="you-chip glass" onclick="go('identity')" title="You">
+        <svg width="18" height="20" viewBox="0 0 100 110"><ellipse cx="50" cy="100" rx="34" ry="7" fill="rgba(0,0,0,0.25)"/><path d="M50 46 C30 50 25 76 24 100 L76 100 C75 76 70 50 50 46 Z" fill="#37472F"/><rect x="30" y="78" width="40" height="6" rx="3" fill="#C9A25A" opacity="0.85"/><ellipse cx="50" cy="28" rx="20" ry="21" fill="#D9B48F"/><path d="M30 29 C28.5 12 37 2 50 2 C63 2 71.5 12 70 29 C66 19 59 15.5 50 15.5 C41 15.5 34 19 30 29 Z" fill="#3B2A18"/><circle cx="50" cy="2" r="6" fill="#3B2A18"/><circle cx="43" cy="33" r="2.4" fill="#2A2018"/><circle cx="57" cy="33" r="2.4" fill="#2A2018"/><path d="M45 42 Q50 45 55 42" stroke="#8B6A50" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+      </div>
     </div>
   </div>
+
+  <!-- zone travel strip: goal-personalized garden depth (proposal §4.1) -->
+  <div class="zone-strip" id="zoneStrip"></div>
+  <div class="zone-caption" id="zoneCaption">The Courtyard · always yours</div>
 
   <div class="greeting">
     <h1 id="greetTitle">Good evening, Kai</h1>
@@ -1074,7 +1092,11 @@ body {
 
   <div class="home-ui">
     <div class="chip-status glass" id="chipStatus"><span class="dot"></span><span id="chipText">Haru is raking the sand garden</span></div>
-    <div class="pwidget glass">
+    <div class="reflect-pill glass" id="reflectPill" onclick="openReflection()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="1.8"><path d="M21 12.8A9 9 0 1111.2 3 7 7 0 0021 12.8z"/></svg>
+      <span>Reflect on today</span>
+    </div>
+    <div class="pwidget glass" onclick="openIntentions()">
       <div id="xpPop">+60 Growth</div>
       <svg width="44" height="44" viewBox="0 0 44 44" style="flex-shrink:0;">
         <circle cx="22" cy="22" r="18" stroke="rgba(255,255,255,0.09)" stroke-width="3" fill="none"/>
@@ -1084,10 +1106,77 @@ body {
         <text id="ringNum" x="22" y="26.5" text-anchor="middle" fill="#F0EBE0" font-size="13" font-family="Cormorant Garamond, serif">2</text>
       </svg>
       <div style="flex:1; min-width:0;">
-        <div class="ptitle" id="pTitle">2 of 5 promises kept</div>
+        <div class="ptitle" id="pTitle">2 of 5 intentions kept</div>
         <div class="psub" id="pSub">Next · Evening journal · 9 PM</div>
       </div>
-      <div class="keep-btn" id="keepBtn" onclick="keepPromise()">Kept ✓</div>
+      <div class="keep-btn" id="keepBtn" onclick="event.stopPropagation(); keepPromise();">Kept ✓</div>
+    </div>
+  </div>
+
+  <!-- Intentions sheet (was: full Promises screen, now a contextual overlay on the world) -->
+  <div class="scrim" id="intentionsScrim" onclick="closeIntentions()"></div>
+  <div class="sheet" id="intentionsSheet">
+    <div class="sheet-handle"></div>
+    <div style="display:flex; align-items:baseline; justify-content:space-between; margin-bottom:4px;">
+      <div style="font-family:var(--serif); font-size:22px; font-weight:300; color:var(--cream);">Today's intentions</div>
+      <div class="label-xs" style="color:rgba(212,168,83,0.6);" id="icCount">3 of 5</div>
+    </div>
+    <div style="font-family:var(--serif); font-style:italic; font-size:12.5px; color:var(--sand); margin-bottom:16px;">Keeping one shapes the world you're standing in.</div>
+    <div id="intentionCard" class="promise-card">
+      <div class="label-xs" id="pcCount" style="color:rgba(212,168,83,0.6); margin-bottom:14px;">Intention 3 of 5</div>
+      <div id="pcTitle" style="font-family:var(--serif);font-size:28px;font-weight:300;color:var(--cream);line-height:1.1;margin-bottom:6px;">Evening Journal</div>
+      <div id="pcSub" style="font-family:var(--serif);font-style:italic;font-size:15px;color:var(--sand);margin-bottom:16px;">10 minutes</div>
+      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:16px;border-top:0.5px solid rgba(255,255,255,0.08);">
+        <div style="font-size:12px;color:rgba(240,235,224,0.4);">Reward</div>
+        <div id="pcReward" style="font-family:var(--serif);font-size:17px;color:var(--gold);">+60 Growth</div>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px; margin-top:12px;">
+      <div onclick="swipeCard('left')" style="flex:1;background:rgba(255,255,255,0.05);border:0.5px solid rgba(255,255,255,0.1);border-radius:16px;padding:13px;text-align:center;cursor:pointer;">
+        <div class="label-xs" style="color:rgba(240,235,224,0.35);">Remind later</div>
+      </div>
+      <div onclick="swipeCard('right')" style="flex:1;background:rgba(212,168,83,0.12);border:0.5px solid rgba(212,168,83,0.25);border-radius:16px;padding:13px;text-align:center;cursor:pointer;">
+        <div class="label-xs" style="color:var(--gold);">Intention kept</div>
+      </div>
+    </div>
+    <div class="label-xs" style="margin-top:16px; margin-bottom:8px;">Tomorrow</div>
+    <div style="display:flex;flex-direction:column;gap:6px;">
+      <div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.07);border-radius:13px;padding:10px 15px;display:flex;gap:12px;align-items:center;">
+        <div style="font-size:10px;color:rgba(212,168,83,0.5);min-width:34px;">6:00</div>
+        <div style="font-family:var(--serif);font-size:14px;color:var(--cream);">Morning run — 5km</div>
+      </div>
+      <div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.07);border-radius:13px;padding:10px 15px;display:flex;gap:12px;align-items:center;">
+        <div style="font-size:10px;color:rgba(212,168,83,0.5);min-width:34px;">9:00</div>
+        <div style="font-family:var(--serif);font-size:14px;color:var(--cream);">Deep work — 2 hours</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Reflection sheet (was: full Reflection screen, now surfaced contextually via the evening pill above) -->
+  <div class="scrim" id="reflectionScrim" onclick="closeReflection()"></div>
+  <div class="sheet" id="reflectionSheet">
+    <div class="sheet-handle"></div>
+    <div style="font-family:var(--serif); font-size:22px; font-weight:300; color:var(--cream); margin-bottom:3px;">Today's reflection</div>
+    <div style="font-family:var(--serif); font-style:italic; font-size:12.5px; color:rgba(240,235,224,0.4); margin-bottom:16px;">Friday, July 10</div>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px;">
+      <div class="glass-card" style="padding:12px;text-align:center;">
+        <div style="font-family:var(--serif);font-size:24px;color:var(--cream);font-weight:300;">4</div>
+        <div class="label-xs" style="margin-top:3px;">Kept</div>
+      </div>
+      <div class="glass-card" style="padding:12px;text-align:center;">
+        <div style="font-family:var(--serif);font-size:24px;color:rgba(240,235,224,0.35);font-weight:300;">1</div>
+        <div class="label-xs" style="margin-top:3px;">Missed</div>
+      </div>
+    </div>
+    <div class="glass-card" style="padding:16px;margin-bottom:14px;">
+      <div class="label-xs" style="margin-bottom:8px;">From Haru</div>
+      <div style="font-family:var(--serif);font-size:14.5px;font-style:italic;color:var(--cream);line-height:1.6;">"Four intentions kept. You did what you said you'd do — the garden remembers. Tomorrow, one more."</div>
+    </div>
+    <div class="label-xs" style="margin-bottom:8px;">Journal</div>
+    <textarea placeholder="What does today mean to you?" style="width:100%;height:66px;background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.1);border-radius:16px;padding:13px;font-size:13px;color:var(--cream);font-family:var(--sans);resize:none;outline:none;line-height:1.6;"></textarea>
+    <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
+      <div onclick="closeReflection(); openIntentions();" style="background:rgba(212,168,83,0.1);border:0.5px solid rgba(212,168,83,0.22);border-radius:999px;padding:14px;text-align:center;cursor:pointer;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--gold);">Review tomorrow's intentions</div>
+      <div onclick="closeReflection()" style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.08);border-radius:999px;padding:14px;text-align:center;cursor:pointer;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:rgba(240,235,224,0.35);">Return to the garden</div>
     </div>
   </div>
 
@@ -1149,63 +1238,32 @@ body {
   </div>
 </div>
 
-<!-- ============ PROMISES ============ -->
-<div class="screen" id="screen-promises">
-  <div style="position:absolute;inset:0;background:#0C0B09;overflow:hidden;">
-    <svg width="375" height="812" viewBox="0 0 375 812" style="position:absolute;opacity:0.5;">
-      <ellipse cx="187" cy="90" rx="220" ry="130" fill="#141008" opacity="0.8"/>
-    </svg>
-  </div>
-  <div class="status-bar"><div class="time clock">21:30</div><div style="font-family:var(--serif);font-style:italic;font-size:13px;color:rgba(240,235,224,0.4);">Promises</div></div>
-  <div style="position:relative;z-index:5;padding:6px 26px 0;flex-shrink:0;">
-    <div style="font-family:var(--serif);font-size:24px;font-weight:300;color:var(--cream);">Today's promises</div>
-    <div style="display:flex;gap:20px;margin-top:12px;">
-      <div><div class="label-xs">Rank</div><div style="font-family:var(--serif);font-size:15px;color:var(--sand);margin-top:2px;">Pathfinder</div></div>
-      <div><div class="label-xs">Growth</div><div style="font-family:var(--serif);font-size:15px;color:var(--cream);margin-top:2px;">Level 8</div></div>
-      <div><div class="label-xs">Consistency</div><div style="font-family:var(--serif);font-size:15px;color:var(--cream);margin-top:2px;">94%</div></div>
-    </div>
-  </div>
-  <div style="position:relative;z-index:5;flex:1;display:flex;flex-direction:column;justify-content:center;padding:16px 26px 96px;gap:12px;overflow:hidden;">
-    <div class="label-xs" style="color:rgba(212,168,83,0.55);">Up next</div>
-    <div id="promiseCard" class="promise-card">
-      <div class="label-xs" id="pcCount" style="color:rgba(212,168,83,0.6); margin-bottom:14px;">Promise 3 of 5</div>
-      <div id="pcTitle" style="font-family:var(--serif);font-size:30px;font-weight:300;color:var(--cream);line-height:1.1;margin-bottom:6px;">Evening Journal</div>
-      <div id="pcSub" style="font-family:var(--serif);font-style:italic;font-size:16px;color:var(--sand);margin-bottom:18px;">10 minutes</div>
-      <div style="display:flex;justify-content:space-between;align-items:center;padding-top:18px;border-top:0.5px solid rgba(255,255,255,0.08);">
-        <div style="font-size:12px;color:rgba(240,235,224,0.4);">Reward</div>
-        <div id="pcReward" style="font-family:var(--serif);font-size:18px;color:var(--gold);">+60 Growth</div>
-      </div>
-    </div>
-    <div style="display:flex;gap:12px;">
-      <div onclick="swipeCard('left')" style="flex:1;background:rgba(255,255,255,0.05);border:0.5px solid rgba(255,255,255,0.1);border-radius:18px;padding:14px;text-align:center;cursor:pointer;">
-        <div class="label-xs" style="color:rgba(240,235,224,0.35);">Remind later</div>
-      </div>
-      <div onclick="swipeCard('right')" style="flex:1;background:rgba(212,168,83,0.12);border:0.5px solid rgba(212,168,83,0.25);border-radius:18px;padding:14px;text-align:center;cursor:pointer;">
-        <div class="label-xs" style="color:var(--gold);">Promise kept</div>
-      </div>
-    </div>
-    <div class="label-xs" style="margin-top:6px;">Tomorrow</div>
-    <div style="display:flex;flex-direction:column;gap:6px;">
-      <div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.07);border-radius:13px;padding:10px 15px;display:flex;gap:12px;align-items:center;">
-        <div style="font-size:10px;color:rgba(212,168,83,0.5);min-width:34px;">6:00</div>
-        <div style="font-family:var(--serif);font-size:14px;color:var(--cream);">Morning run — 5km</div>
-      </div>
-      <div style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.07);border-radius:13px;padding:10px 15px;display:flex;gap:12px;align-items:center;">
-        <div style="font-size:10px;color:rgba(212,168,83,0.5);min-width:34px;">9:00</div>
-        <div style="font-family:var(--serif);font-size:14px;color:var(--cream);">Deep work — 2 hours</div>
-      </div>
-    </div>
-  </div>
-  <div class="nav-pill" data-active="promises"></div>
-</div>
-
-<!-- ============ JOURNEY ============ -->
-<div class="screen" id="screen-journey">
+<!-- ============ YOU ============ -->
+<div class="screen" id="screen-identity">
   <div style="position:absolute;inset:0;background:#0B0A08;"></div>
-  <div class="status-bar"><div class="time clock">21:30</div><div style="font-family:var(--serif);font-style:italic;font-size:13px;color:rgba(240,235,224,0.4);">Journey</div></div>
-  <div style="position:relative;z-index:5;flex:1;overflow-y:auto;padding:6px 24px 96px;">
-    <div style="font-family:var(--serif);font-size:28px;font-weight:300;color:var(--cream);margin-bottom:4px;">Your growth</div>
-    <div style="font-family:var(--serif);font-style:italic;font-size:14px;color:var(--sand);margin-bottom:22px;">Level 8 Pathfinder</div>
+  <div class="status-bar"><div class="time clock">21:30</div></div>
+
+  <div style="position:relative;z-index:5;padding:6px 24px 0;flex-shrink:0;display:flex;align-items:center;gap:16px;">
+    <div style="width:58px;height:58px;border-radius:20px;background:rgba(255,255,255,0.06);border:0.5px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;overflow:hidden;flex-shrink:0;">
+      <svg width="42" height="48" viewBox="0 0 100 110"><ellipse cx="50" cy="100" rx="34" ry="7" fill="rgba(0,0,0,0.25)"/><path d="M50 46 C30 50 25 76 24 100 L76 100 C75 76 70 50 50 46 Z" fill="#37472F"/><rect x="30" y="78" width="40" height="6" rx="3" fill="#C9A25A" opacity="0.85"/><ellipse cx="50" cy="28" rx="20" ry="21" fill="#D9B48F"/><path d="M30 29 C28.5 12 37 2 50 2 C63 2 71.5 12 70 29 C66 19 59 15.5 50 15.5 C41 15.5 34 19 30 29 Z" fill="#3B2A18"/><circle cx="50" cy="2" r="6" fill="#3B2A18"/><circle cx="43" cy="33" r="2.4" fill="#2A2018"/><circle cx="57" cy="33" r="2.4" fill="#2A2018"/><path d="M45 42 Q50 45 55 42" stroke="#8B6A50" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
+    </div>
+    <div>
+      <div style="font-family:var(--serif);font-size:22px;font-weight:300;color:var(--cream);">Kai</div>
+      <div style="font-family:var(--serif);font-style:italic;font-size:12.5px;color:var(--sand);margin-top:2px;">Pathfinder · Level 8</div>
+    </div>
+  </div>
+
+  <!-- segmented tabs: Progress (was Journey) / Companion / Settings (was two rows of Identity) — one deliberate destination instead of three -->
+  <div class="you-tabs">
+    <div class="you-tab active" id="ytab-progress" onclick="showYouTab('progress')">Progress</div>
+    <div class="you-tab" id="ytab-companion" onclick="showYouTab('companion')">Companion</div>
+    <div class="you-tab" id="ytab-settings" onclick="showYouTab('settings')">Settings</div>
+  </div>
+
+  <div style="position:relative;z-index:5;flex:1;overflow-y:auto;padding:0 24px 96px;">
+
+  <!-- ---- Progress panel (was: standalone Journey screen) ---- -->
+  <div class="you-panel active" id="panel-progress">
     <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:20px;">
       <div class="glass-card" style="padding:16px;">
         <div class="label-xs" style="margin-bottom:8px;">Consistency</div>
@@ -1268,29 +1326,14 @@ body {
         <div style="font-family:var(--serif);font-size:14px;color:var(--gold);">+800</div>
       </div>
     </div>
-  </div>
-  <div class="nav-pill" data-active="journey"></div>
-</div>
+  </div><!-- /panel-progress -->
 
-<!-- ============ YOU (IDENTITY) ============ -->
-<div class="screen" id="screen-identity">
-  <div style="position:absolute;inset:0;background:#0B0A08;"></div>
-  <div class="status-bar"><div class="time clock">21:30</div></div>
-  <div style="position:relative;z-index:5;flex:1;overflow-y:auto;padding:0 24px 96px;">
-    <div style="padding:6px 0 22px;display:flex;align-items:center;gap:16px;">
-      <div style="width:68px;height:68px;border-radius:22px;background:rgba(255,255,255,0.06);border:0.5px solid rgba(255,255,255,0.12);display:flex;align-items:center;justify-content:center;overflow:hidden;">
-        <svg width="50" height="56" viewBox="0 0 100 110"><ellipse cx="50" cy="100" rx="34" ry="7" fill="rgba(0,0,0,0.25)"/><path d="M50 46 C30 50 25 76 24 100 L76 100 C75 76 70 50 50 46 Z" fill="#37472F"/><rect x="30" y="78" width="40" height="6" rx="3" fill="#C9A25A" opacity="0.85"/><ellipse cx="50" cy="28" rx="20" ry="21" fill="#D9B48F"/><path d="M30 29 C28.5 12 37 2 50 2 C63 2 71.5 12 70 29 C66 19 59 15.5 50 15.5 C41 15.5 34 19 30 29 Z" fill="#3B2A18"/><circle cx="50" cy="2" r="6" fill="#3B2A18"/><circle cx="43" cy="33" r="2.4" fill="#2A2018"/><circle cx="57" cy="33" r="2.4" fill="#2A2018"/><path d="M45 42 Q50 45 55 42" stroke="#8B6A50" stroke-width="1.5" fill="none" stroke-linecap="round"/></svg>
-      </div>
-      <div>
-        <div style="font-family:var(--serif);font-size:24px;font-weight:300;color:var(--cream);">Kai</div>
-        <div style="font-family:var(--serif);font-style:italic;font-size:13px;color:var(--sand);margin-top:2px;">Pathfinder · Level 8</div>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:22px;">
-      <div class="glass-card" style="padding:14px;"><div class="label-xs">Promises Kept</div><div style="font-family:var(--serif);font-size:26px;color:var(--cream);margin-top:4px;">847</div></div>
+  <!-- ---- Companion panel (was: Identity screen's customization rows) ---- -->
+  <div class="you-panel" id="panel-companion">
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:20px;">
+      <div class="glass-card" style="padding:14px;"><div class="label-xs">Intentions Kept</div><div style="font-family:var(--serif);font-size:26px;color:var(--cream);margin-top:4px;">847</div></div>
       <div class="glass-card" style="padding:14px;"><div class="label-xs">Days Active</div><div style="font-family:var(--serif);font-size:26px;color:var(--cream);margin-top:4px;">94</div></div>
     </div>
-    <div class="label-xs" style="margin-bottom:10px;">Companion</div>
     <div class="glass-card" style="padding:16px;margin-bottom:20px;">
       <div style="display:flex;align-items:center;gap:14px;margin-bottom:12px;">
         <div style="width:44px;height:44px;border-radius:14px;background:rgba(212,168,83,0.08);border:0.5px solid rgba(212,168,83,0.15);display:flex;align-items:center;justify-content:center;">
@@ -1318,7 +1361,10 @@ body {
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.3)" stroke-width="1.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
       </div>
     </div>
-    <div class="label-xs" style="margin-bottom:10px;">Settings</div>
+  </div><!-- /panel-companion -->
+
+  <!-- ---- Settings panel (was: bottom rows of Identity screen) ---- -->
+  <div class="you-panel" id="panel-settings">
     <div class="glass-card" style="overflow:hidden;border-radius:18px;">
       <div style="display:flex;align-items:center;padding:14px 16px;border-bottom:0.5px solid rgba(255,255,255,0.05);cursor:pointer;">
         <div style="flex:1;font-size:13px;color:rgba(240,235,224,0.7);">Subscription</div>
@@ -1335,61 +1381,28 @@ body {
         <div style="flex:1;font-size:13px;color:rgba(240,235,224,0.35);">Reset memory</div>
       </div>
     </div>
+  </div><!-- /panel-settings -->
+
   </div>
   <div class="nav-pill" data-active="identity"></div>
-</div>
-
-<!-- ============ REFLECTION ============ -->
-<div class="screen" id="screen-reflection">
-  <div style="position:absolute;inset:0;overflow:hidden;background:#080907;">
-    <svg width="375" height="812" viewBox="0 0 375 812" style="position:absolute;opacity:0.6;">
-      <ellipse cx="187" cy="400" rx="220" ry="300" fill="#0A0E09" opacity="0.6"/>
-      <ellipse cx="187" cy="650" rx="220" ry="120" fill="#0C1209" opacity="0.5"/>
-    </svg>
-    <div class="blossom" style="left:30%;top:0;animation-duration:15s;background:rgba(200,140,155,0.4);"></div>
-    <div class="blossom" style="left:70%;top:0;animation-duration:18s;animation-delay:4s;background:rgba(210,150,165,0.35);"></div>
-  </div>
-  <div class="status-bar"><div class="time">21:30</div><div style="font-family:var(--serif);font-style:italic;font-size:13px;color:rgba(240,235,224,0.35);">End of day</div></div>
-  <div style="position:relative;z-index:5;flex:1;padding:12px 28px 30px;display:flex;flex-direction:column;overflow-y:auto;">
-    <div style="font-family:var(--serif);font-size:28px;font-weight:300;color:var(--cream);margin-bottom:4px;">Today's reflection</div>
-    <div style="font-family:var(--serif);font-style:italic;font-size:14px;color:rgba(240,235,224,0.4);margin-bottom:22px;">Friday, July 10</div>
-    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:18px;">
-      <div class="glass-card" style="padding:14px;text-align:center;">
-        <div style="font-family:var(--serif);font-size:28px;color:var(--cream);font-weight:300;">4</div>
-        <div class="label-xs" style="margin-top:4px;">Kept</div>
-      </div>
-      <div class="glass-card" style="padding:14px;text-align:center;">
-        <div style="font-family:var(--serif);font-size:28px;color:rgba(240,235,224,0.35);font-weight:300;">1</div>
-        <div class="label-xs" style="margin-top:4px;">Missed</div>
-      </div>
-    </div>
-    <div class="glass-card" style="padding:20px;margin-bottom:16px;">
-      <div class="label-xs" style="margin-bottom:10px;">From Haru</div>
-      <div style="font-family:var(--serif);font-size:16px;font-style:italic;color:var(--cream);line-height:1.65;">"Four promises kept. You did what you said you'd do — the garden remembers. Tomorrow, one more."</div>
-    </div>
-    <div style="flex:1;min-height:120px;">
-      <div class="label-xs" style="margin-bottom:8px;">Journal</div>
-      <textarea placeholder="What does today mean to you?" style="width:100%;height:90px;background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.1);border-radius:16px;padding:14px;font-size:13px;color:var(--cream);font-family:var(--sans);resize:none;outline:none;line-height:1.6;"></textarea>
-    </div>
-    <div style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
-      <div onclick="go('promises')" style="background:rgba(212,168,83,0.1);border:0.5px solid rgba(212,168,83,0.22);border-radius:999px;padding:16px;text-align:center;cursor:pointer;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:var(--gold);">Review tomorrow's promises</div>
-      <div onclick="go('home')" style="background:rgba(255,255,255,0.04);border:0.5px solid rgba(255,255,255,0.08);border-radius:999px;padding:16px;text-align:center;cursor:pointer;font-size:11px;letter-spacing:0.1em;text-transform:uppercase;color:rgba(240,235,224,0.35);">Return to the garden</div>
-    </div>
-  </div>
 </div>
 </div>
 
 <div class="hint">
-  The garden is alive — Haru moves between the sand garden, the koi pond, the azaleas and his meditation stone.<br/>
-  Tap Haru to hear him · tap the sun/moon to shift time of day · press "Kept" to watch him celebrate.
+  Two destinations, not five — World is the app; You is a deliberate side trip.<br/>
+  Tap Haru to hear him · tap a zone chip to travel the garden · tap the pouch or "Reflect" to open a sheet over the world · tap the weather icon to cycle sky conditions.
 </div>
 
 <script>
-/* ---------- navigation ---------- */
+/* ---------- navigation ----------
+   v3: NAV now has exactly two entries. There is no more 4-item tab bar —
+   "World" is the app's only home (still uses the internal id "home" so the
+   screen id / go() calls below didn't need renaming), and "You" (still
+   internal id "identity") is the one deliberate, occasional destination.
+   Intentions, Reflection and Chat are sheets — see openIntentions() /
+   openReflection() / openChat() below — not nav items. */
 const NAV = [
-  { id: 'home', label: 'Home', icon: '<path d="M12 22v-8"/><path d="M12 14C12 9 8.5 6.5 4 6.5C4 11.5 7.5 14 12 14z"/><path d="M12 14c0-4 3.5-6.5 8-6.5c0 5-3.5 6.5-8 6.5z"/>' },
-  { id: 'promises', label: 'Promises', icon: '<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5.5"/>' },
-  { id: 'journey', label: 'Journey', icon: '<polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>' },
+  { id: 'home', label: 'World', icon: '<path d="M12 22v-8"/><path d="M12 14C12 9 8.5 6.5 4 6.5C4 11.5 7.5 14 12 14z"/><path d="M12 14c0-4 3.5-6.5 8-6.5c0 5-3.5 6.5-8 6.5z"/>' },
   { id: 'identity', label: 'You', icon: '<path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/>' },
 ];
 document.querySelectorAll('.nav-pill').forEach(pill => {
@@ -1428,6 +1441,10 @@ function setTod(name) {
   home.classList.add('tod-' + name);
   todIdx = TODS.indexOf(name);
   document.getElementById('greetTitle').textContent = GREET[name];
+  // Reflection is surfaced contextually (evening/night), not as a nav item —
+  // proposal §3, the "9pm ritual" row.
+  const pill = document.getElementById('reflectPill');
+  if (pill) pill.classList.toggle('visible', name === 'dusk' || name === 'night');
 }
 function cycleTod() { setTod(TODS[(todIdx + 1) % TODS.length]); }
 (function initTod() {
@@ -1506,7 +1523,7 @@ function speak(text) {
 function hideSpeech() { speech.classList.remove('show'); }
 function tapCompanion() { if (!moving) speak(); }
 
-/* ---------- promises / celebration ---------- */
+/* ---------- intentions / celebration ---------- */
 let kept = 2, total = 5;
 const nextPromises = ['Evening journal · 9 PM', 'Water intake · 3L', 'Read · 20 pages', 'Lights out · 11 PM'];
 const CIRC = 113.1;
@@ -1514,10 +1531,12 @@ const CIRC = 113.1;
 function updateRing() {
   document.getElementById('ringFg').style.strokeDashoffset = CIRC * (1 - kept / total);
   document.getElementById('ringNum').textContent = kept;
-  document.getElementById('pTitle').textContent = kept + ' of ' + total + ' promises kept';
+  document.getElementById('pTitle').textContent = kept + ' of ' + total + ' intentions kept';
   document.getElementById('pSub').textContent = kept >= total
-    ? 'All promises kept. The lanterns burn brighter tonight.'
+    ? 'All intentions kept. The lanterns burn brighter tonight.'
     : 'Next · ' + nextPromises[Math.min(kept - 2, nextPromises.length - 1)];
+  const ic = document.getElementById('icCount');
+  if (ic) ic.textContent = kept + ' of ' + total;
 }
 function keepPromise() {
   if (kept >= total) return;
@@ -1556,8 +1575,13 @@ function petalBurst() {
 }
 updateRing();
 
-/* ---------- chat sheet ---------- */
+/* ---------- overlay sheets: Chat / Intentions / Reflection ----------
+   All three share the same slide-up pattern (v2's proven chat sheet,
+   unchanged) — Intentions and Reflection are new sheets in v3, replacing
+   what used to be full-screen navigations. Opening one closes the others
+   so they never stack. */
 function openChat() {
+  closeIntentions(); closeReflection();
   document.getElementById('chatScrim').classList.add('show');
   document.getElementById('chatSheet').classList.add('show');
 }
@@ -1565,8 +1589,26 @@ function closeChat() {
   document.getElementById('chatScrim').classList.remove('show');
   document.getElementById('chatSheet').classList.remove('show');
 }
+function openIntentions() {
+  closeChat(); closeReflection();
+  document.getElementById('intentionsScrim').classList.add('show');
+  document.getElementById('intentionsSheet').classList.add('show');
+}
+function closeIntentions() {
+  document.getElementById('intentionsScrim').classList.remove('show');
+  document.getElementById('intentionsSheet').classList.remove('show');
+}
+function openReflection() {
+  closeChat(); closeIntentions();
+  document.getElementById('reflectionScrim').classList.add('show');
+  document.getElementById('reflectionSheet').classList.add('show');
+}
+function closeReflection() {
+  document.getElementById('reflectionScrim').classList.remove('show');
+  document.getElementById('reflectionSheet').classList.remove('show');
+}
 
-/* ---------- promises deck (Promises screen) ---------- */
+/* ---------- intentions deck (inside the Intentions sheet) ---------- */
 const deck = [
   { title: 'Evening Journal', sub: '10 minutes', reward: '+60 Growth', count: '3 of 5' },
   { title: 'Water Intake', sub: '3 litres', reward: '+40 Growth', count: '4 of 5' },
@@ -1576,19 +1618,94 @@ const deck = [
 ];
 let deckIdx = 0;
 function swipeCard(dir) {
-  const card = document.getElementById('promiseCard');
+  const card = document.getElementById('intentionCard');
   card.style.animation = dir === 'right' ? 'swipe-right 400ms ease-out forwards' : 'swipe-left 400ms ease-out forwards';
   if (dir === 'right' && kept < total) { kept++; updateRing(); }
   setTimeout(() => {
     deckIdx = (deckIdx + 1) % deck.length;
     const p = deck[deckIdx];
-    document.getElementById('pcCount').textContent = 'Promise ' + p.count;
+    document.getElementById('pcCount').textContent = 'Intention ' + p.count;
     document.getElementById('pcTitle').textContent = p.title;
     document.getElementById('pcSub').textContent = p.sub;
     document.getElementById('pcReward').textContent = p.reward;
     card.style.animation = 'card-slide-in 380ms ease-out forwards';
     setTimeout(() => { card.style.animation = ''; }, 400);
   }, 380);
+}
+
+/* ---------- You screen: segmented tabs (Progress / Companion / Settings) ---------- */
+function showYouTab(name) {
+  ['progress', 'companion', 'settings'].forEach(t => {
+    document.getElementById('ytab-' + t).classList.toggle('active', t === name);
+    document.getElementById('panel-' + t).classList.toggle('active', t === name);
+  });
+}
+
+/* ---------- zone travel strip: goal-personalized garden depth (proposal §4.1) ----------
+   Same continuous world (shared sky, shared companion, shared time-of-day) —
+   only a re-lighting filter + caption change per zone, not separate art.
+   Locked zones show their unlock condition instead of switching. */
+const ZONES = [
+  { id: 'courtyard', label: 'The Courtyard', locked: false, caption: 'The Courtyard · always yours', cls: '' },
+  { id: 'training', label: 'Training Ground', locked: false, caption: 'The Training Ground · for Fitness & Discipline', cls: 'zone-training' },
+  { id: 'study', label: 'Study Veranda', locked: true, caption: 'The Study Veranda', cls: '', hint: 'Unlocks after a 7-day streak in Learning' },
+  { id: 'spring', label: 'The Spring', locked: true, caption: 'The Spring', cls: '', hint: 'Unlocks after a 7-day streak in Skin' },
+];
+let currentZone = 'courtyard';
+function renderZoneStrip() {
+  const strip = document.getElementById('zoneStrip');
+  strip.innerHTML = ZONES.map(z => `
+    <div class="zone-chip${z.id === currentZone ? ' active' : ''}${z.locked ? ' locked' : ''}" onclick="selectZone('${z.id}')">
+      <span class="zdot"></span>
+      <span class="zlabel">${z.label}</span>
+      ${z.locked ? '<svg class="lock-ic" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="rgba(240,235,224,0.5)" stroke-width="2"><rect x="4" y="11" width="16" height="9" rx="2"/><path d="M8 11V7a4 4 0 018 0v4"/></svg>' : ''}
+    </div>`).join('');
+}
+function selectZone(id) {
+  const z = ZONES.find(zz => zz.id === id);
+  if (!z) return;
+  if (z.locked) { showZoneHint(z.hint); return; }
+  currentZone = id;
+  const world = document.getElementById('screen-home');
+  ZONES.forEach(zz => { if (zz.cls) world.classList.remove(zz.cls); });
+  if (z.cls) world.classList.add(z.cls);
+  document.getElementById('zoneCaption').textContent = z.caption;
+  renderZoneStrip();
+}
+let zoneHintTimer = null;
+function showZoneHint(text) {
+  const toast = document.getElementById('zoneHint');
+  toast.textContent = text;
+  toast.classList.add('show');
+  clearTimeout(zoneHintTimer);
+  zoneHintTimer = setTimeout(() => toast.classList.remove('show'), 2600);
+}
+renderZoneStrip();
+
+/* ---------- weather layer (proposal §4.3): ephemeral, independent of streak/season ---------- */
+const WEATHERS = ['clear', 'rain', 'mist'];
+let weatherIdx = 0;
+function renderRain() {
+  const layer = document.getElementById('rainLayer');
+  layer.innerHTML = '';
+  for (let i = 0; i < 40; i++) {
+    const d = document.createElement('div');
+    d.className = 'rain-drop';
+    d.style.left = rand(0, 100) + '%';
+    d.style.animationDuration = rand(0.6, 1.1) + 's';
+    d.style.animationDelay = rand(0, 1.5) + 's';
+    layer.appendChild(d);
+  }
+}
+function applyWeather(name) {
+  const world = document.getElementById('screen-home');
+  world.classList.remove('weather-rain', 'weather-mist');
+  if (name === 'rain') { world.classList.add('weather-rain'); renderRain(); }
+  if (name === 'mist') world.classList.add('weather-mist');
+}
+function cycleWeather() {
+  weatherIdx = (weatherIdx + 1) % WEATHERS.length;
+  applyWeather(WEATHERS[weatherIdx]);
 }
 
 /* =========================================================================
@@ -1758,9 +1875,12 @@ if (REDUCE_MOTION) {
    sky for a couple of seconds, so the companion never reads as a rigid loop. */
 const MICRO_IDLES = ['stretch', 'glance'];
 const MICRO_IDLE_CHIP = { stretch: 'Haru pauses to stretch.', glance: 'Haru glances up at the sky.' };
+function anySheetOpen() {
+  return ['chatSheet', 'intentionsSheet', 'reflectionSheet'].some(id => document.getElementById(id).classList.contains('show'));
+}
 function scheduleMicroIdle() {
   setTimeout(() => {
-    if (!moving && !document.getElementById('chatSheet').classList.contains('show') && Math.random() < 0.4) {
+    if (!moving && !anySheetOpen() && Math.random() < 0.4) {
       playMicroIdle();
     }
     scheduleMicroIdle();
@@ -1889,7 +2009,7 @@ function markInteraction() {
 
 setInterval(() => {
   if (moving) return; // spec: companion must not be mid-transition
-  if (document.getElementById('chatSheet').classList.contains('show')) return;
+  if (anySheetOpen()) return;
   const idleFor = Date.now() - lastInteraction;
   if (idleFor < idleWindowThreshold || idleWindowHandled) return;
   idleWindowHandled = true; // one roll per idle window
