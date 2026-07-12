@@ -233,3 +233,180 @@ describe("api/client — release build (__DEV__ === false)", () => {
     expect(result.token).toBe("real-token");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Companion World endpoints (world-build-plan.md) — intentions/chat/
+// customization/journal, plus the quiz-submission fire-and-forget call.
+// These have no offline mock (see client.ts's httpRequest doc comment), so
+// only the "online" shape is exercised here.
+// ---------------------------------------------------------------------------
+describe("api/client — Companion World endpoints (mocked fetch)", () => {
+  const originalFetch = global.fetch;
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.stubEnv("EXPO_PUBLIC_API_URL", "http://test-server.invalid");
+  });
+
+  afterEach(() => {
+    global.fetch = originalFetch;
+    vi.unstubAllEnvs();
+  });
+
+  it("getIntentions sends the bearer token and an optional ?date= query", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ intentions: [], scheduledFor: "2026-07-12" }), { status: 200 })
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { getIntentions } = await import("./client");
+    const result = await getIntentions("tok", "2026-07-12");
+
+    expect(result).toEqual({ intentions: [], scheduledFor: "2026-07-12" });
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://test-server.invalid/api/intentions?date=2026-07-12");
+    expect(init.method).toBe("GET");
+    expect((init.headers as Record<string, string>).Authorization).toBe("Bearer tok");
+  });
+
+  it("getIntentions returns null on a non-ok response instead of throwing", async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response("", { status: 500 })) as unknown as typeof fetch;
+    const { getIntentions } = await import("./client");
+    expect(await getIntentions("tok")).toBeNull();
+  });
+
+  it("createIntention POSTs the camelCase body and returns the server's intention row", async () => {
+    const intention = {
+      id: "i1",
+      user_id: "u1",
+      title: "Morning run",
+      subtitle: null,
+      reward_growth: 20,
+      scheduled_for: "2026-07-12",
+      status: "pending",
+      source: "user",
+      created_at: "2026-07-12T06:00:00.000Z",
+      kept_at: null,
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ intention }), { status: 201 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { createIntention } = await import("./client");
+    const result = await createIntention(
+      { title: "Morning run", rewardGrowth: 20, scheduledFor: "2026-07-12" },
+      "tok"
+    );
+
+    expect(result).toEqual(intention);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toEqual({ title: "Morning run", rewardGrowth: 20, scheduledFor: "2026-07-12" });
+  });
+
+  it("keepIntention POSTs to /:id/keep with an empty body", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ intention: { id: "i1", status: "kept" } }), { status: 200 })
+    );
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { keepIntention } = await import("./client");
+    await keepIntention("i1", "tok");
+
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://test-server.invalid/api/intentions/i1/keep");
+    expect(init.method).toBe("POST");
+  });
+
+  it("sendChatMessage returns both the stored user message and the companion reply", async () => {
+    const userMessage = { id: "m1", user_id: "u1", role: "user", content: "hi", created_at: "t" };
+    const companionMessage = {
+      id: "m2",
+      user_id: "u1",
+      role: "companion",
+      content: "hello",
+      created_at: "t",
+    };
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ userMessage, companionMessage }), { status: 201 })
+    ) as unknown as typeof fetch;
+
+    const { sendChatMessage } = await import("./client");
+    const result = await sendChatMessage("hi", "tok");
+    expect(result).toEqual({ userMessage, companionMessage });
+  });
+
+  it("getCustomization surfaces whether the result came from customization or the onboarding fallback", async () => {
+    const customization = {
+      companion_species: "fox",
+      personality: "coach",
+      environment: "japanese_garden",
+    };
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ customization, source: "onboarding_profile" }), { status: 200 })
+    ) as unknown as typeof fetch;
+
+    const { getCustomization } = await import("./client");
+    const result = await getCustomization("tok");
+    expect(result).toEqual({ customization, source: "onboarding_profile" });
+  });
+
+  it("updateCustomization PUTs the full replacement body", async () => {
+    const customization = {
+      companion_species: "dragonkin",
+      personality: "rival",
+      environment: "sky_islands",
+    };
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ customization }), { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { updateCustomization } = await import("./client");
+    const result = await updateCustomization(
+      { companionSpecies: "dragonkin", personality: "rival", environment: "sky_islands" },
+      "tok"
+    );
+
+    expect(result).toEqual(customization);
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.method).toBe("PUT");
+  });
+
+  it("createJournalEntry POSTs { content } and returns the stored entry", async () => {
+    const entry = { id: "j1", user_id: "u1", content: "Good day.", created_at: "t" };
+    global.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ entry }), { status: 201 })) as unknown as typeof fetch;
+
+    const { createJournalEntry } = await import("./client");
+    expect(await createJournalEntry("Good day.", "tok")).toEqual(entry);
+  });
+
+  it("submitQuizAnswers POSTs to /api/onboarding/quiz with the answers + skippedEntirely shape", async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(new Response(JSON.stringify({ ok: true }), { status: 200 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const { submitQuizAnswers } = await import("./client");
+    const result = await submitQuizAnswers(
+      { answers: { startingPoint: "restarting" }, skippedEntirely: false },
+      "tok"
+    );
+
+    expect(result.ok).toBe(true);
+    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://test-server.invalid/api/onboarding/quiz");
+    const body = JSON.parse(init.body as string) as Record<string, unknown>;
+    expect(body).toEqual({ answers: { startingPoint: "restarting" }, skippedEntirely: false });
+  });
+
+  it("submitQuizAnswers resolves ok:false (never throws) when the route isn't reachable, so callers can safely fire-and-forget it", async () => {
+    global.fetch = vi.fn().mockResolvedValue(new Response("", { status: 404 })) as unknown as typeof fetch;
+    const { submitQuizAnswers } = await import("./client");
+    const result = await submitQuizAnswers({ answers: {}, skippedEntirely: true }, "tok");
+    expect(result.ok).toBe(false);
+  });
+});

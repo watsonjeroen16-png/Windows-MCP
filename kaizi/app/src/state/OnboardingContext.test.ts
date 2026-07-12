@@ -87,9 +87,9 @@ describe("onboardingReducer", () => {
     expect(state.sessionToken).toBe("abc.def");
   });
 
-  describe("step 7 sub-stage navigation (phone -> verify -> handoff, terminal)", () => {
+  describe("step 8 sub-stage navigation (phone -> verify -> handoff, terminal)", () => {
     it("next() walks phone -> verify -> handoff and then holds (terminal screen)", () => {
-      let state: OnboardingState = { ...initialOnboardingState, step: 7, smsStage: "phone" };
+      let state: OnboardingState = { ...initialOnboardingState, step: 8, smsStage: "phone" };
       state = onboardingReducer(state, { kind: "next" });
       expect(state.smsStage).toBe("verify");
       state = onboardingReducer(state, { kind: "next" });
@@ -99,24 +99,98 @@ describe("onboardingReducer", () => {
     });
 
     it("back() from handoff is a no-op (no back from the terminal screen)", () => {
-      const state: OnboardingState = { ...initialOnboardingState, step: 7, smsStage: "handoff" };
+      const state: OnboardingState = { ...initialOnboardingState, step: 8, smsStage: "handoff" };
       const after = onboardingReducer(state, { kind: "back" });
       expect(after).toEqual(state);
     });
 
     it("back() from verify returns to phone", () => {
-      const state: OnboardingState = { ...initialOnboardingState, step: 7, smsStage: "verify" };
+      const state: OnboardingState = { ...initialOnboardingState, step: 8, smsStage: "verify" };
       const after = onboardingReducer(state, { kind: "back" });
       expect(after.smsStage).toBe("phone");
     });
   });
 
-  it("next()/back() at step boundaries never goes below 1 or above 7", () => {
+  it("next()/back() at step boundaries never goes below 1 or above 8, walking through the quiz's 10 internal cards at step 4", () => {
     const atStart = onboardingReducer(initialOnboardingState, { kind: "back" });
     expect(atStart.step).toBe(1);
 
     let state: OnboardingState = initialOnboardingState;
-    for (let i = 0; i < 6; i++) state = onboardingReducer(state, { kind: "next" });
-    expect(state.step).toBe(7);
+    // 1 -> 2 -> 3 -> 4 (enters the quiz)
+    for (let i = 0; i < 3; i++) state = onboardingReducer(state, { kind: "next" });
+    expect(state.step).toBe(4);
+    expect(state.quizIndex).toBe(0);
+    // 10 "next"s inside the quiz walk its internal cards, then land on step 5.
+    for (let i = 0; i < 10; i++) state = onboardingReducer(state, { kind: "next" });
+    expect(state.step).toBe(5);
+    expect(state.quizIndex).toBe(0);
+    // 5 -> 6 -> 7 -> 8
+    for (let i = 0; i < 3; i++) state = onboardingReducer(state, { kind: "next" });
+    expect(state.step).toBe(8);
+  });
+
+  describe("quiz sub-navigation (step 4)", () => {
+    it("set_quiz_answer records a single-select answer by key", () => {
+      const state = onboardingReducer(initialOnboardingState, {
+        kind: "set_quiz_answer",
+        key: "startingPoint",
+        value: "restarting",
+      });
+      expect(state.quizAnswers.startingPoint).toBe("restarting");
+    });
+
+    it("toggle_quiz_multi_answer adds then removes a value from the multi-select array", () => {
+      let state = onboardingReducer(initialOnboardingState, {
+        kind: "toggle_quiz_multi_answer",
+        key: "availability",
+        value: "early_morning",
+      });
+      expect(state.quizAnswers.availability).toEqual(["early_morning"]);
+      state = onboardingReducer(state, {
+        kind: "toggle_quiz_multi_answer",
+        key: "availability",
+        value: "evening",
+      });
+      expect(state.quizAnswers.availability).toEqual(["early_morning", "evening"]);
+      state = onboardingReducer(state, {
+        kind: "toggle_quiz_multi_answer",
+        key: "availability",
+        value: "early_morning",
+      });
+      expect(state.quizAnswers.availability).toEqual(["evening"]);
+    });
+
+    it("next() at step 4 advances quizIndex without changing step, until the 10th card completes the quiz", () => {
+      let state: OnboardingState = { ...initialOnboardingState, step: 4, quizIndex: 0 };
+      state = onboardingReducer(state, { kind: "next" });
+      expect(state.step).toBe(4);
+      expect(state.quizIndex).toBe(1);
+
+      state = { ...state, quizIndex: 9 }; // 10th (last) card
+      state = onboardingReducer(state, { kind: "next" });
+      expect(state.step).toBe(5);
+      expect(state.quizIndex).toBe(0);
+    });
+
+    it("back() at step 4 decrements quizIndex, then exits to step 3 (Why) from the first card", () => {
+      let state: OnboardingState = { ...initialOnboardingState, step: 4, quizIndex: 3 };
+      state = onboardingReducer(state, { kind: "back" });
+      expect(state.step).toBe(4);
+      expect(state.quizIndex).toBe(2);
+
+      state = { ...state, quizIndex: 0 };
+      state = onboardingReducer(state, { kind: "back" });
+      expect(state.step).toBe(3);
+    });
+
+    it("skip_whole_quiz records quizSkipped and jumps straight to step 5 (Companion)", () => {
+      const state = onboardingReducer(
+        { ...initialOnboardingState, step: 4, quizIndex: 4 },
+        { kind: "skip_whole_quiz" }
+      );
+      expect(state.quizSkipped).toBe(true);
+      expect(state.step).toBe(5);
+      expect(state.quizIndex).toBe(0);
+    });
   });
 });

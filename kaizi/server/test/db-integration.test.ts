@@ -61,8 +61,12 @@ describe.skipIf(!RUN)("integration: real Postgres", () => {
     const client = new pg.Client({ connectionString: DATABASE_URL });
     await client.connect();
     try {
+      // TRUNCATE ... CASCADE on `users` already cascades to every table with
+      // an FK to it (onboarding_quiz_responses, intentions, chat_messages,
+      // etc.) — onboarding_quiz_responses and intentions are still listed
+      // explicitly for clarity about what this test file touches.
       await client.query(
-        "TRUNCATE TABLE memory_entries, sms_preferences, onboarding_profiles, users RESTART IDENTITY CASCADE"
+        "TRUNCATE TABLE memory_entries, sms_preferences, onboarding_profiles, onboarding_quiz_responses, intentions, users RESTART IDENTITY CASCADE"
       );
     } finally {
       await client.end();
@@ -203,5 +207,116 @@ describe.skipIf(!RUN)("integration: real Postgres", () => {
     } finally {
       await client.end();
     }
+  });
+
+  it("persists onboarding quiz answers via POST /api/onboarding/quiz against real Postgres", async () => {
+    const check = await request(app).post("/api/verify/check").send({ phone: PHONE, code: "000000" });
+    const auth = `Bearer ${check.body.token}`;
+
+    const res = await request(app)
+      .post("/api/onboarding/quiz")
+      .set("Authorization", auth)
+      .send({
+        answers: {
+          focusGoal: "fitness",
+          startingPoint: "restarting",
+          obstacle: "distractions",
+          confidence: "fairly",
+        },
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.created).toBe(true);
+
+    const user = await db.getUserByPhone(PHONE);
+    const row = await db.getQuizResponses(user!.id);
+    expect(row).not.toBeNull();
+    expect(row!.answers).toMatchObject({
+      focusGoal: "fitness",
+      startingPoint: "restarting",
+      obstacle: "distractions",
+      confidence: "fairly",
+    });
+    expect(row!.skipped_entirely).toBe(false);
+    expect(row!.completed_at).toBeInstanceOf(Date);
+
+    // Re-submit updates in place (200, not 201) — confirms the real
+    // ON CONFLICT DO UPDATE path, not just the in-memory test double's.
+    const second = await request(app)
+      .post("/api/onboarding/quiz")
+      .set("Authorization", auth)
+      .send({ answers: { confidence: "very" } });
+    expect(second.status).toBe(200);
+    expect(second.body.created).toBe(false);
+    const updated = await db.getQuizResponses(user!.id);
+    expect(updated!.answers.confidence).toBe("very");
+    // Confirms JSONB round-trips as a real object, not a JSON string.
+    expect(typeof updated!.answers).toBe("object");
+  });
+
+  it("intentions.source defaults to 'user' via the real column DEFAULT, and 'companion' persists explicitly", async () => {
+    const user = await db.upsertVerifiedUser(PHONE);
+
+    const userIntention = await worldDb.createIntention(user.id, {
+      title: "User-typed intention",
+      rewardGrowth: 5,
+      scheduledFor: "2026-07-12",
+    });
+    expect(userIntention.source).toBe("user");
+
+    const companionIntention = await worldDb.createIntention(user.id, {
+      title: "AI-generated intention",
+      rewardGrowth: 10,
+      scheduledFor: "2026-07-12",
+      source: "companion",
+    });
+    expect(companionIntention.source).toBe("companion");
+
+    // Read back through a raw query to confirm the CHECK constraint and
+    // default are real schema behavior, not something only the app-layer
+    // code path produces.
+    const pg = (await import("pg")).default;
+    const client = new pg.Client({ connectionString: DATABASE_URL });
+    await client.connect();
+    try {
+      const { rows } = await client.query(
+        "SELECT id, source FROM intentions WHERE user_id = $1 ORDER BY created_at ASC",
+        [user.id]
+      );
+      expect(rows.map((r: { source: string }) => r.source)).toEqual(["user", "companion"]);
+
+      // The CHECK constraint actually rejects an invalid source at the DB level.
+      await expect(
+        client.query("INSERT INTO intentions (user_id, title, reward_growth, scheduled_for, source) VALUES ($1, $2, $3, $4, $5)", [
+          user.id,
+          "Bad row",
+          5,
+          "2026-07-12",
+          "robot",
+        ])
+      ).rejects.toThrow();
+    } finally {
+      await client.end();
+    }
+  });
+
+  it("POST /api/intentions/generate persists companion-sourced intentions against real Postgres (mock mode)", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    const check = await request(app).post("/api/verify/check").send({ phone: PHONE, code: "000000" });
+    const auth = `Bearer ${check.body.token}`;
+
+    const res = await request(app)
+      .post("/api/intentions/generate")
+      .set("Authorization", auth)
+      .send({ count: 2, scheduledFor: "2026-07-13" });
+    expect(res.status).toBe(201);
+    expect(res.body.intentions).toHaveLength(2);
+    for (const intention of res.body.intentions) {
+      expect(intention.source).toBe("companion");
+    }
+
+    const user = await db.getUserByPhone(PHONE);
+    const rows = await worldDb.listIntentionsForDate(user!.id, "2026-07-13");
+    expect(rows).toHaveLength(2);
+    expect(rows.every((r) => r.source === "companion")).toBe(true);
   });
 });

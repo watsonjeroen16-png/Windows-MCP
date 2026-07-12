@@ -24,7 +24,7 @@ import { Inter_400Regular } from "@expo-google-fonts/inter/400Regular";
 import { Inter_500Medium } from "@expo-google-fonts/inter/500Medium";
 import { useFonts } from "expo-font";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Alert, BackHandler, StyleSheet, View } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -35,6 +35,7 @@ import { EnvironmentSelectionScreen } from "./src/screens/EnvironmentSelectionSc
 import { GoalSelectionScreen } from "./src/screens/GoalSelectionScreen";
 import { HandoffScreen } from "./src/screens/HandoffScreen";
 import { IdentityInputScreen } from "./src/screens/IdentityInputScreen";
+import { KaiziApp } from "./src/screens/KaiziApp";
 import { PersonalitySelectionScreen } from "./src/screens/PersonalitySelectionScreen";
 import { QuizScreen } from "./src/screens/QuizScreen";
 import { SmsSetupScreen } from "./src/screens/SmsSetupScreen";
@@ -89,7 +90,7 @@ function backgroundFor(
   }
 }
 
-function OnboardingFlow() {
+function OnboardingFlow({ onEnterWorld }: { onEnterWorld: () => void }) {
   const { state, dispatch } = useOnboarding();
   const { step, smsStage } = state;
 
@@ -143,7 +144,7 @@ function OnboardingFlow() {
         ) : smsStage === "verify" ? (
           <VerifyCodeScreen />
         ) : (
-          <HandoffScreen />
+          <HandoffScreen onEnterWorld={onEnterWorld} />
         );
       break;
   }
@@ -156,6 +157,33 @@ function OnboardingFlow() {
       {screen}
     </View>
   );
+}
+
+/**
+ * Onboarding -> World handoff. `entered` flips once (via HandoffScreen's
+ * onEnterWorld callback) and never flips back — re-opening the app after
+ * this point should resume in the World, not re-run onboarding. Persisting
+ * that resume point across app restarts needs AsyncStorage, same deferred
+ * dependency noted in state/OnboardingContext.tsx; state lives in memory for
+ * this build.
+ */
+function RootFlow() {
+  const { state } = useOnboarding();
+  const [entered, setEntered] = useState(false);
+
+  if (entered && state.companion !== null && state.personality !== null && state.environment !== null && state.sessionToken !== null) {
+    return (
+      <KaiziApp
+        sessionToken={state.sessionToken}
+        goals={state.goals}
+        companion={state.companion}
+        personality={state.personality}
+        environment={state.environment}
+      />
+    );
+  }
+
+  return <OnboardingFlow onEnterWorld={() => setEntered(true)} />;
 }
 
 export default function App() {
@@ -179,7 +207,7 @@ export default function App() {
     <SafeAreaProvider>
       <OnboardingProvider>
         <StatusBar style="light" />
-        <OnboardingFlow />
+        <RootFlow />
       </OnboardingProvider>
     </SafeAreaProvider>
   );

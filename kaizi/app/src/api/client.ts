@@ -9,7 +9,7 @@
  * warning — never as user-facing UI.
  */
 import type { CompanionId, EnvironmentId, GoalId, PersonalityId } from "../data/ids";
-import type { SmsPrefs } from "../state/OnboardingContext";
+import type { QuizAnswers, SmsPrefs } from "../state/OnboardingContext";
 
 export interface VerifyStartRequest {
   phone: string; // E.164
@@ -237,4 +237,216 @@ export async function sendWelcomeSms(token: string): Promise<ApiResult> {
     return { ok: true, offline: true };
   }
   return { ok: response.ok || response.status === 409, offline: false };
+}
+
+/**
+ * POST /api/onboarding/quiz — submit the 10-question personalization quiz
+ * (personalization-spec.md section 1). Body shape matches
+ * `submitQuizSchema`/`quizAnswersSchema` in kaizi/server/src/schemas.ts
+ * verbatim (the backend agent's parallel work — schemas + DB layer are
+ * landed; confirm the route itself is mounted before relying on this in
+ * production, see docs/design/PENDING_INTEGRATION notes). Called fire-and-
+ * forget from the handoff screen: a quiz submission failure must never block
+ * onboarding completion, so this intentionally has no release-build "hard
+ * failure" branch like submitProfile/sendWelcomeSms — callers should not
+ * gate navigation on its result.
+ */
+export interface SubmitQuizRequest {
+  answers: QuizAnswers;
+  skippedEntirely: boolean;
+}
+
+export async function submitQuizAnswers(
+  quiz: SubmitQuizRequest,
+  token: string
+): Promise<ApiResult> {
+  const response = await post("/api/onboarding/quiz", quiz, token);
+  if (response === null) {
+    return { ok: false, offline: !isReleaseBuild };
+  }
+  return { ok: response.ok, offline: false };
+}
+
+// ---------------------------------------------------------------------------
+// Companion World — Intentions, chat, customization, journal
+// (world-build-plan.md). Live backend surface; no offline mock (see
+// httpRequest's doc comment) — callers render a real error/loading state.
+// Response bodies use the server's Postgres row shape (snake_case) verbatim,
+// matching kaizi/server/src/db/world-types.ts; request bodies are camelCase,
+// matching each route's zod schema.
+// ---------------------------------------------------------------------------
+
+export type IntentionStatus = "pending" | "kept" | "missed";
+/** Who conceived the intention — a user typing it in, or a companion suggestion. Present once the backend's `source` column is wired into the route response (see final report); falls back to "user" when absent. */
+export type IntentionSource = "user" | "companion";
+
+export interface Intention {
+  id: string;
+  user_id: string;
+  title: string;
+  subtitle: string | null;
+  reward_growth: number;
+  scheduled_for: string;
+  status: IntentionStatus;
+  source?: IntentionSource;
+  created_at: string;
+  kept_at: string | null;
+}
+
+export interface CreateIntentionRequest {
+  title: string;
+  subtitle?: string;
+  rewardGrowth: number;
+  scheduledFor: string;
+}
+
+/** GET /api/intentions — today's intentions, or another date via `date` (YYYY-MM-DD). */
+export async function getIntentions(
+  token: string,
+  date?: string
+): Promise<{ intentions: Intention[]; scheduledFor: string } | null> {
+  const query = date !== undefined ? `?date=${encodeURIComponent(date)}` : "";
+  const response = await get(`/api/intentions${query}`, token);
+  if (response === null || !response.ok) return null;
+  try {
+    return (await response.json()) as { intentions: Intention[]; scheduledFor: string };
+  } catch {
+    return null;
+  }
+}
+
+/** POST /api/intentions — create a manual "add your own" intention (Intentions sheet, "Yours today"). */
+export async function createIntention(
+  input: CreateIntentionRequest,
+  token: string
+): Promise<Intention | null> {
+  const response = await post("/api/intentions", input, token);
+  if (response === null || !response.ok) return null;
+  try {
+    const data = (await response.json()) as { intention: Intention };
+    return data.intention;
+  } catch {
+    return null;
+  }
+}
+
+/** POST /api/intentions/:id/keep — mark an intention kept. */
+export async function keepIntention(id: string, token: string): Promise<Intention | null> {
+  const response = await post(`/api/intentions/${encodeURIComponent(id)}/keep`, {}, token);
+  if (response === null || !response.ok) return null;
+  try {
+    const data = (await response.json()) as { intention: Intention };
+    return data.intention;
+  } catch {
+    return null;
+  }
+}
+
+export type ChatRole = "user" | "companion";
+
+export interface ChatMessage {
+  id: string;
+  user_id: string;
+  role: ChatRole;
+  content: string;
+  created_at: string;
+}
+
+/** GET /api/chat — recent chat history, oldest first. */
+export async function getChatMessages(token: string, limit?: number): Promise<ChatMessage[] | null> {
+  const query = limit !== undefined ? `?limit=${limit}` : "";
+  const response = await get(`/api/chat${query}`, token);
+  if (response === null || !response.ok) return null;
+  try {
+    const data = (await response.json()) as { messages: ChatMessage[] };
+    return data.messages;
+  } catch {
+    return null;
+  }
+}
+
+/** POST /api/chat — send a user message; returns both the stored user message and the real Claude-generated companion reply. */
+export async function sendChatMessage(
+  content: string,
+  token: string
+): Promise<{ userMessage: ChatMessage; companionMessage: ChatMessage } | null> {
+  const response = await post("/api/chat", { content }, token);
+  if (response === null || !response.ok) return null;
+  try {
+    return (await response.json()) as { userMessage: ChatMessage; companionMessage: ChatMessage };
+  } catch {
+    return null;
+  }
+}
+
+export interface CompanionCustomization {
+  id?: string;
+  user_id?: string;
+  companion_species: CompanionId;
+  personality: PersonalityId;
+  environment: EnvironmentId;
+  updated_at?: string;
+}
+
+/** GET /api/customization — falls back to the onboarding profile server-side until the user customizes post-onboarding. */
+export async function getCustomization(
+  token: string
+): Promise<{ customization: CompanionCustomization; source: "customization" | "onboarding_profile" } | null> {
+  const response = await get("/api/customization", token);
+  if (response === null || !response.ok) return null;
+  try {
+    return (await response.json()) as {
+      customization: CompanionCustomization;
+      source: "customization" | "onboarding_profile";
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** PUT /api/customization — full replacement of species/personality/environment (You → Companion tab). */
+export async function updateCustomization(
+  input: { companionSpecies: CompanionId; personality: PersonalityId; environment: EnvironmentId },
+  token: string
+): Promise<CompanionCustomization | null> {
+  const response = await put("/api/customization", input, token);
+  if (response === null || !response.ok) return null;
+  try {
+    const data = (await response.json()) as { customization: CompanionCustomization };
+    return data.customization;
+  } catch {
+    return null;
+  }
+}
+
+export interface JournalEntry {
+  id: string;
+  user_id: string;
+  content: string;
+  created_at: string;
+}
+
+/** GET /api/journal — recent Reflection entries, newest first. */
+export async function getJournalEntries(token: string, limit?: number): Promise<JournalEntry[] | null> {
+  const query = limit !== undefined ? `?limit=${limit}` : "";
+  const response = await get(`/api/journal${query}`, token);
+  if (response === null || !response.ok) return null;
+  try {
+    const data = (await response.json()) as { entries: JournalEntry[] };
+    return data.entries;
+  } catch {
+    return null;
+  }
+}
+
+/** POST /api/journal — create a Reflection journal entry. */
+export async function createJournalEntry(content: string, token: string): Promise<JournalEntry | null> {
+  const response = await post("/api/journal", { content }, token);
+  if (response === null || !response.ok) return null;
+  try {
+    const data = (await response.json()) as { entry: JournalEntry };
+    return data.entry;
+  } catch {
+    return null;
+  }
 }

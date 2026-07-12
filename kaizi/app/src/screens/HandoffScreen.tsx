@@ -1,16 +1,20 @@
 /**
- * Screen 7c — Handoff confirmation. The TERMINAL screen of this build: there
- * is no post-onboarding destination; the relationship continues over SMS and
- * the app rests here (ambient loops keep running, re-opening returns here).
+ * Screen 8c — Handoff confirmation, the bridge from onboarding into the
+ * living World (app-restructure-v3.md; mockup: verify success replaces the
+ * code entry in-place with this confirmation, then `go('home')`s after a
+ * beat — see kaizi_v3_mockup.html's obVerifyCheck/finishVerify). The
+ * relationship continues over SMS *and* the app now has a real home.
  *
  * On mount the onboarding state is committed immediately (profile POST, then
- * the first companion SMS is enqueued) with no further user action.
+ * the first companion SMS is enqueued, then a fire-and-forget quiz
+ * submission) with no further user action, then `onEnterWorld` fires after a
+ * short beat so the ritual reads before the world opens.
  */
 import React, { useEffect, useRef } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import Svg, { Path } from "react-native-svg";
 
-import { sendWelcomeSms, submitProfile } from "../api/client";
+import { sendWelcomeSms, submitProfile, submitQuizAnswers } from "../api/client";
 import { companionById } from "../data/companions";
 import { useOnboarding } from "../state/OnboardingContext";
 import { ChatBubble } from "../ui/ChatBubble";
@@ -40,13 +44,22 @@ function CheckRow({ label }: { label: string }) {
   );
 }
 
-export function HandoffScreen() {
+const ENTER_WORLD_DELAY_MS = 2400;
+
+export function HandoffScreen({ onEnterWorld }: { onEnterWorld: () => void }) {
   const { state } = useOnboarding();
   const committed = useRef(false);
 
   const companion = state.companion !== null ? companionById(state.companion) : null;
 
-  // Commit immediately on reaching 7c — profile first, then the welcome SMS.
+  // Beat before the world opens (mirrors the mockup's 2.4s handoff pause).
+  useEffect(() => {
+    const timer = setTimeout(onEnterWorld, ENTER_WORLD_DELAY_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Commit immediately on reaching 8c — profile first, then the welcome SMS.
   useEffect(() => {
     if (committed.current) return;
     committed.current = true;
@@ -67,6 +80,14 @@ export function HandoffScreen() {
       if (profile.ok) {
         await sendWelcomeSms(sessionToken);
       }
+      // Fire-and-forget: quiz submission never blocks/fails onboarding
+      // (personalization-spec.md — the quiz is fully skippable by design).
+      // See api/client.ts submitQuizAnswers doc comment: the backend route
+      // may not be mounted yet, in which case this simply no-ops server-side.
+      void submitQuizAnswers(
+        { answers: state.quizAnswers, skippedEntirely: state.quizSkipped },
+        sessionToken
+      );
     })();
     // Intentionally run once with the state present at handoff.
     // eslint-disable-next-line react-hooks/exhaustive-deps

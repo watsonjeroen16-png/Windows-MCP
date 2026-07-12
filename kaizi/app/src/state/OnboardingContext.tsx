@@ -3,10 +3,12 @@
  * from onboarding-spec.md (ids in snake_case per the backend contract; see
  * src/data/ids.ts for the deviation note).
  *
- * Navigation is a state-driven step switcher, not a router: the flow is 7
- * strictly linear screens (plus two sub-screens inside step 7), so `step` +
- * `smsStage` fully determine what renders. expo-router would add file-system
- * routing, deep links, and a nav container none of which this build needs.
+ * Navigation is a state-driven step switcher, not a router: the flow is 8
+ * strictly linear steps (step 4 is the personalization quiz — a 10-card
+ * internal sequence tracked by `quizIndex`, plus two sub-screens inside step
+ * 8), so `step` + `quizIndex` + `smsStage` fully determine what renders.
+ * expo-router would add file-system routing, deep links, and a nav container
+ * none of which this build needs.
  *
  * Persistence: state lives in memory for this build. The spec's "killing the
  * app resumes at the last incomplete step" needs AsyncStorage, which is not
