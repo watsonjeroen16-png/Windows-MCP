@@ -10,6 +10,9 @@ import type {
   ProfileRow,
   ProfileUpsertInput,
   ProfileUpsertResult,
+  QuizResponsesRow,
+  QuizResponsesUpsertInput,
+  QuizResponsesUpsertResult,
   SmsPreferencesRow,
   UserRow,
   UserWithProfile,
@@ -105,6 +108,35 @@ export function createPgDb(databaseUrl: string): Db {
         [userId]
       );
       return (rowCount ?? 0) > 0;
+    },
+
+    async upsertQuizResponses(
+      userId: string,
+      input: QuizResponsesUpsertInput
+    ): Promise<QuizResponsesUpsertResult> {
+      const existing = await pool.query("SELECT 1 FROM onboarding_quiz_responses WHERE user_id = $1", [
+        userId,
+      ]);
+      const { rows } = await pool.query<QuizResponsesRow>(
+        `INSERT INTO onboarding_quiz_responses (user_id, answers, skipped_entirely, completed_at)
+         VALUES ($1, $2, $3, now())
+         ON CONFLICT (user_id) DO UPDATE SET
+           answers = EXCLUDED.answers,
+           skipped_entirely = EXCLUDED.skipped_entirely,
+           completed_at = now(),
+           updated_at = now()
+         RETURNING *`,
+        [userId, JSON.stringify(input.answers), input.skippedEntirely]
+      );
+      return { created: existing.rows.length === 0, row: rows[0]! };
+    },
+
+    async getQuizResponses(userId: string): Promise<QuizResponsesRow | null> {
+      const { rows } = await pool.query<QuizResponsesRow>(
+        "SELECT * FROM onboarding_quiz_responses WHERE user_id = $1",
+        [userId]
+      );
+      return rows[0] ?? null;
     },
 
     async close(): Promise<void> {

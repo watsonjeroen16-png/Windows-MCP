@@ -24,7 +24,7 @@ export function EnvironmentSelectionScreen() {
 
   return (
     <OnboardingScreen
-      step={6}
+      step={7}
       direction={state.direction}
       onBack={() => dispatch({ kind: "back" })}
       cta={

@@ -4,20 +4,12 @@
 import React from "react";
 import { StyleSheet, Text, View } from "react-native";
 
-import { GOAL_IDS, type GoalId } from "../data/ids";
+import { GOAL_IDS, GOAL_LABELS } from "../data/ids";
 import { useOnboarding } from "../state/OnboardingContext";
 import { Chip } from "../ui/Chip";
 import { GoldButton } from "../ui/GoldButton";
 import { OnboardingScreen, ScreenHeader } from "../ui/OnboardingScreen";
 import { gold, space, type } from "../ui/tokens";
-
-const GOAL_LABELS: Record<GoalId, string> = {
-  fitness: "Fitness",
-  skin: "Skin",
-  business: "Business",
-  discipline: "Discipline",
-  learning: "Learning",
-};
 
 export function GoalSelectionScreen() {
   const { state, dispatch } = useOnboarding();

@@ -28,6 +28,8 @@ interface OnboardingScreenProps {
   cta?: React.ReactNode;
   microcopy?: string;
   keyboardAvoiding?: boolean;
+  /** Optional top-right chrome slot, mirroring the back slot (e.g. the quiz's "Skip quiz" link, card 1 only). */
+  topRight?: React.ReactNode;
 }
 
 export function OnboardingScreen({
@@ -39,6 +41,7 @@ export function OnboardingScreen({
   cta,
   microcopy,
   keyboardAvoiding = false,
+  topRight,
 }: OnboardingScreenProps) {
   const insets = useSafeAreaInsets();
   const showDots = step >= 2;
@@ -70,6 +73,7 @@ export function OnboardingScreen({
             <ProgressDots current={step} />
           )
         ) : null}
+        {topRight !== undefined ? <View style={styles.topRightSlot}>{topRight}</View> : null}
       </View>
       {keyboardAvoiding ? (
         <KeyboardAvoidingView
@@ -124,6 +128,11 @@ const styles = StyleSheet.create({
   backSlot: {
     position: "absolute",
     left: space.md,
+    zIndex: 2,
+  },
+  topRightSlot: {
+    position: "absolute",
+    right: space.md,
     zIndex: 2,
   },
   content: {

@@ -3,7 +3,7 @@ import { Router } from "express";
 import type { Db } from "../db/types.js";
 import type { AuthedRequest } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
-import { profileSchema, type ProfileInput } from "../schemas.js";
+import { profileSchema, submitQuizSchema, type ProfileInput, type SubmitQuizInput } from "../schemas.js";
 
 export const MEMORY_KIND_IDENTITY_WHY = "identity_why";
 
@@ -56,6 +56,50 @@ export function createOnboardingRouter({ db }: { db: Db }): Router {
         ok: true,
         userId: user.id,
         created: result.created,
+      });
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  // POST /api/onboarding/quiz — persist the 10-question onboarding quiz
+  // (personalization-spec.md section 1), or record a full "Skip quiz" via
+  // skippedEntirely. Same auth/session pattern as POST /profile: identity
+  // comes from the bearer token (never the body), requires a verified phone.
+  // Idempotent-ish upsert, matching /profile's re-post semantics — a user
+  // who backs up and changes an answer before finishing onboarding just
+  // re-submits.
+  router.post("/quiz", validateBody(submitQuizSchema), async (req, res, next) => {
+    try {
+      const input = req.body as SubmitQuizInput;
+      const phone = (req as AuthedRequest).authPhone!;
+
+      const user = await db.getUserByPhone(phone);
+      if (!user) {
+        res.status(404).json({
+          error: "phone_not_found",
+          detail: "no user for this phone — complete verification first",
+        });
+        return;
+      }
+      if (!user.phone_verified_at) {
+        res.status(409).json({
+          error: "phone_not_verified",
+          detail: "phone must be verified before saving quiz responses",
+        });
+        return;
+      }
+
+      const result = await db.upsertQuizResponses(user.id, {
+        answers: input.answers,
+        skippedEntirely: input.skippedEntirely,
+      });
+
+      res.status(result.created ? 201 : 200).json({
+        ok: true,
+        userId: user.id,
+        created: result.created,
+        skippedEntirely: result.row.skipped_entirely,
       });
     } catch (err) {
       next(err);

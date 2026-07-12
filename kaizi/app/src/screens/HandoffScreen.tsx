@@ -73,7 +73,7 @@ export function HandoffScreen() {
   }, []);
 
   return (
-    <OnboardingScreen step={7} dotsComplete direction={state.direction}>
+    <OnboardingScreen step={8} dotsComplete direction={state.direction}>
       <View style={styles.stack}>
         <View style={styles.avatarBlock}>
           <GlowOrb size={220} style={styles.orb} />

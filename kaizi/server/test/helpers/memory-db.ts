@@ -9,6 +9,9 @@ import type {
   ProfileRow,
   ProfileUpsertInput,
   ProfileUpsertResult,
+  QuizResponsesRow,
+  QuizResponsesUpsertInput,
+  QuizResponsesUpsertResult,
   SmsPreferencesRow,
   UserRow,
   UserWithProfile,
@@ -27,6 +30,7 @@ export interface MemoryDb extends Db {
   readonly profiles: Map<string, ProfileRow>; // keyed by user id
   readonly smsPrefs: Map<string, SmsPreferencesRow>; // keyed by user id
   readonly memories: MemoryEntry[];
+  readonly quizResponses: Map<string, QuizResponsesRow>; // keyed by user id
 }
 
 export function createMemoryDb(): MemoryDb {
@@ -34,12 +38,14 @@ export function createMemoryDb(): MemoryDb {
   const profiles = new Map<string, ProfileRow>();
   const smsPrefs = new Map<string, SmsPreferencesRow>();
   const memories: MemoryEntry[] = [];
+  const quizResponses = new Map<string, QuizResponsesRow>();
 
   return {
     users,
     profiles,
     smsPrefs,
     memories,
+    quizResponses,
 
     async getUserByPhone(phone: string): Promise<UserRow | null> {
       return users.get(phone) ?? null;
@@ -108,6 +114,28 @@ export function createMemoryDb(): MemoryDb {
         }
       }
       return false;
+    },
+
+    async upsertQuizResponses(
+      userId: string,
+      input: QuizResponsesUpsertInput
+    ): Promise<QuizResponsesUpsertResult> {
+      const existing = quizResponses.get(userId);
+      const row: QuizResponsesRow = {
+        user_id: userId,
+        quiz_version: existing?.quiz_version ?? 1,
+        answers: input.answers,
+        skipped_entirely: input.skippedEntirely,
+        completed_at: new Date(),
+        created_at: existing?.created_at ?? new Date(),
+        updated_at: new Date(),
+      };
+      quizResponses.set(userId, row);
+      return { created: !existing, row };
+    },
+
+    async getQuizResponses(userId: string): Promise<QuizResponsesRow | null> {
+      return quizResponses.get(userId) ?? null;
     },
 
     async close(): Promise<void> {

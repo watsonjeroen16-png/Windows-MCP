@@ -16,11 +16,16 @@
 import React, { createContext, useContext, useMemo, useReducer } from "react";
 
 import type { CompanionId, EnvironmentId, GoalId, PersonalityId } from "../data/ids";
+import { QUIZ_LENGTH, type QuizQuestionKey } from "../data/quiz";
 import type { SlideDirection } from "../ui/motion";
 
-export type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7;
+// Step 4 (Quiz) was inserted after Why per personalization-spec.md section 1
+// (approved 2026-07-12) — Companion/Personality/Environment/SMS all shift by
+// one. Screen-time consent (spec section 2) is cut by founder decision and
+// has no step here: onboarding goes 7 -> 8, not 9.
+export type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8;
 
-/** Sub-screens of step 7 (7a phone, 7b verify, 7c terminal handoff). */
+/** Sub-screens of step 8 (8a phone, 8b verify, 8c terminal handoff). */
 export type SmsStage = "phone" | "verify" | "handoff";
 
 export interface SmsPrefs {
@@ -28,9 +33,22 @@ export interface SmsPrefs {
   evening: boolean;
 }
 
+/**
+ * Quiz answers, keyed exactly as `quizAnswersSchema` (kaizi/server/src/schemas.ts)
+ * expects for `POST /api/onboarding/quiz` — single-select values are the
+ * option's canonical string; `availability` is the one multi-select (string[]).
+ * Skipped/unanswered questions are simply absent, never null (spec section 1.5).
+ */
+export type QuizAnswers = Partial<Record<QuizQuestionKey, string | string[]>>;
+
 export interface OnboardingState {
   goals: GoalId[]; // >= 1 to continue past step 2
   identityWhy: string; // trimmed 10-280 chars to continue past step 3
+  /** 0-based index into QUIZ_QUESTIONS — internal sub-progress of step 4. */
+  quizIndex: number;
+  quizAnswers: QuizAnswers;
+  /** True only if "Skip quiz" was tapped on the first card. */
+  quizSkipped: boolean;
   companion: CompanionId | null;
   personality: PersonalityId | null;
   environment: EnvironmentId | null;
@@ -53,6 +71,9 @@ export interface OnboardingState {
 export const initialOnboardingState: OnboardingState = {
   goals: [],
   identityWhy: "",
+  quizIndex: 0,
+  quizAnswers: {},
+  quizSkipped: false,
   companion: null,
   personality: null,
   environment: null,
@@ -68,6 +89,9 @@ export const initialOnboardingState: OnboardingState = {
 export type OnboardingAction =
   | { kind: "toggle_goal"; goal: GoalId }
   | { kind: "set_identity_why"; text: string }
+  | { kind: "set_quiz_answer"; key: QuizQuestionKey; value: string }
+  | { kind: "toggle_quiz_multi_answer"; key: QuizQuestionKey; value: string }
+  | { kind: "skip_whole_quiz" }
   | { kind: "select_companion"; companion: CompanionId }
   | { kind: "select_personality"; personality: PersonalityId }
   | { kind: "select_environment"; environment: EnvironmentId }
@@ -93,6 +117,20 @@ export function onboardingReducer(
     }
     case "set_identity_why":
       return { ...state, identityWhy: action.text.slice(0, MAX_WHY_LENGTH) };
+    case "set_quiz_answer":
+      return {
+        ...state,
+        quizAnswers: { ...state.quizAnswers, [action.key]: action.value },
+      };
+    case "toggle_quiz_multi_answer": {
+      const current = state.quizAnswers[action.key];
+      const arr = Array.isArray(current) ? current : [];
+      const has = arr.includes(action.value);
+      const next = has ? arr.filter((v) => v !== action.value) : [...arr, action.value];
+      return { ...state, quizAnswers: { ...state.quizAnswers, [action.key]: next } };
+    }
+    case "skip_whole_quiz":
+      return { ...state, quizSkipped: true, quizIndex: 0, step: 5, direction: "forward" };
     case "select_companion":
       return { ...state, companion: action.companion };
     case "select_personality":
@@ -106,10 +144,21 @@ export function onboardingReducer(
     case "set_sms_pref":
       return { ...state, smsPrefs: { ...state.smsPrefs, [action.pref]: action.value } };
     case "next": {
-      if (state.step < 7) {
+      // Inside step 4 (Quiz): "next" advances the internal card index rather
+      // than the global step — used by single-select auto-advance, the
+      // multi-select (Q5) Continue CTA, and "Skip this question" alike. On
+      // the 10th card it completes the quiz and moves to step 5 (Companion).
+      if (state.step === 4) {
+        const advanced = state.quizIndex + 1;
+        if (advanced >= QUIZ_LENGTH) {
+          return { ...state, quizIndex: 0, step: 5, direction: "forward" };
+        }
+        return { ...state, quizIndex: advanced, direction: "forward" };
+      }
+      if (state.step < 8) {
         return { ...state, step: (state.step + 1) as Step, direction: "forward" };
       }
-      // Inside step 7: phone -> verify -> handoff (terminal).
+      // Inside step 8: phone -> verify -> handoff (terminal).
       if (state.smsStage === "phone") return { ...state, smsStage: "verify", direction: "forward" };
       if (state.smsStage === "verify") {
         return { ...state, smsStage: "handoff", direction: "forward" };
@@ -117,11 +166,16 @@ export function onboardingReducer(
       return state; // handoff is terminal — the app rests here
     }
     case "back": {
-      if (state.step === 7) {
+      if (state.step === 8) {
         if (state.smsStage === "handoff") return state; // no back from terminal screen
         if (state.smsStage === "verify") {
           return { ...state, smsStage: "phone", direction: "back" };
         }
+      }
+      // Inside step 4 (Quiz): back steps to the previous card; from the
+      // first card it exits the whole quiz step back to Why (step 3).
+      if (state.step === 4 && state.quizIndex > 0) {
+        return { ...state, quizIndex: state.quizIndex - 1, direction: "back" };
       }
       if (state.step > 1) {
         return { ...state, step: (state.step - 1) as Step, direction: "back" };

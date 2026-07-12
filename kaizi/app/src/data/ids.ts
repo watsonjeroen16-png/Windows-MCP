@@ -9,6 +9,15 @@
 export const GOAL_IDS = ["fitness", "skin", "business", "discipline", "learning"] as const;
 export type GoalId = (typeof GOAL_IDS)[number];
 
+/** Display labels for goal chips (Screen 2, and reused by the quiz's dynamic Q1). */
+export const GOAL_LABELS: Record<GoalId, string> = {
+  fitness: "Fitness",
+  skin: "Skin",
+  business: "Business",
+  discipline: "Discipline",
+  learning: "Learning",
+};
+
 export const COMPANION_IDS = [
   "wolf_pup",
   "fox",

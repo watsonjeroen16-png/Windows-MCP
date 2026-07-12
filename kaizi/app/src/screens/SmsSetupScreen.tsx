@@ -88,7 +88,7 @@ export function SmsSetupScreen() {
 
   return (
     <OnboardingScreen
-      step={7}
+      step={8}
       direction={state.direction}
       onBack={() => dispatch({ kind: "back" })}
       keyboardAvoiding

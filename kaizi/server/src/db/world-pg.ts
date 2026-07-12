@@ -24,11 +24,21 @@ export function createPgWorldDb(databaseUrl: string): WorldDb {
 
   return {
     async createIntention(userId: string, input: CreateIntentionInput): Promise<IntentionRow> {
+      // `source` is COALESCE'd against the column default ("user") rather
+      // than passed a JS-side default, so a caller that omits it gets
+      // exactly the same value the DB would produce for a bare INSERT.
       const { rows } = await pool.query<IntentionRow>(
-        `INSERT INTO intentions (user_id, title, subtitle, reward_growth, scheduled_for)
-         VALUES ($1, $2, $3, $4, $5)
+        `INSERT INTO intentions (user_id, title, subtitle, reward_growth, scheduled_for, source)
+         VALUES ($1, $2, $3, $4, $5, COALESCE($6, 'user'))
          RETURNING *`,
-        [userId, input.title, input.subtitle ?? null, input.rewardGrowth, input.scheduledFor]
+        [
+          userId,
+          input.title,
+          input.subtitle ?? null,
+          input.rewardGrowth,
+          input.scheduledFor,
+          input.source ?? null,
+        ]
       );
       return rows[0]!;
     },

@@ -17,6 +17,7 @@ import { requireAuth, type AuthedRequest } from "../middleware/auth.js";
 import { validateBody } from "../middleware/validate.js";
 import type { Companion, Personality } from "../schemas.js";
 import { getCompanionReply } from "../services/claude-chat.js";
+import { buildQuizProfileDigest } from "../services/quiz-digest.js";
 import type { SessionTokenService } from "../services/session-token.js";
 
 const sendMessageSchema = z.object({
@@ -84,10 +85,11 @@ export function createChatRouter({ db, worldDb, sessionTokens }: ChatRouterDeps)
 
       const { content } = req.body as { content: string };
 
-      const [userMessage, customization, userWithProfile] = await Promise.all([
+      const [userMessage, customization, userWithProfile, quizResponses] = await Promise.all([
         worldDb.insertChatMessage(user.id, "user", content),
         worldDb.getCustomization(user.id),
         db.getUserWithProfile(phone),
+        db.getQuizResponses(user.id),
       ]);
 
       const profile = userWithProfile?.profile ?? null;
@@ -114,11 +116,18 @@ export function createChatRouter({ db, worldDb, sessionTokens }: ChatRouterDeps)
         digestLines.push(`Unkept intentions today: ${unkeptTitles.join("; ")}`);
       }
 
+      // Quiz-derived digest (personalization-spec.md section 3.4) — its own
+      // cache_control breakpoint in claude-chat.ts's system prompt, separate
+      // from the volatile memoryDigest above. Empty when the user has no
+      // quiz responses on file or skipped the quiz entirely.
+      const quizDigest = quizResponses ? buildQuizProfileDigest(quizResponses.answers) : "";
+
       const reply = await getCompanionReply({
         personality,
         companionName,
         species,
         memoryDigest: digestLines.join("\n"),
+        quizDigest,
         userMessage: content,
       });
 

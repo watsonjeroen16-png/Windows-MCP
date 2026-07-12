@@ -14,6 +14,8 @@ import type { Companion, Environment, Personality } from "../schemas.js";
 
 export type IntentionStatus = "pending" | "kept" | "missed";
 export type ChatRole = "user" | "companion";
+/** Who conceived the intention — a user typing it in, or the companion's AI-generated suggestion. */
+export type IntentionSource = "user" | "companion";
 
 export interface IntentionRow {
   id: string;
@@ -24,6 +26,7 @@ export interface IntentionRow {
   /** Calendar date the intention applies to, e.g. "2026-07-11" (no time component). */
   scheduled_for: string;
   status: IntentionStatus;
+  source: IntentionSource;
   created_at: Date;
   kept_at: Date | null;
 }
@@ -34,6 +37,8 @@ export interface CreateIntentionInput {
   rewardGrowth: number;
   /** "YYYY-MM-DD" */
   scheduledFor: string;
+  /** Defaults to "user" (the DB column default) when omitted — pass "companion" explicitly for AI-generated intentions. */
+  source?: IntentionSource;
 }
 
 export interface ChatMessageRow {

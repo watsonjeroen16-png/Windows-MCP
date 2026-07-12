@@ -47,7 +47,7 @@ function Dot({ status }: { status: DotStatus }) {
   return <Animated.View style={[styles.dot, style]} />;
 }
 
-export function ProgressDots({ total = 7, current }: ProgressDotsProps) {
+export function ProgressDots({ total = 8, current }: ProgressDotsProps) {
   return (
     <View style={styles.row} accessibilityLabel={`Step ${current} of ${total}`}>
       {Array.from({ length: total }, (_, index) => {
@@ -61,7 +61,7 @@ export function ProgressDots({ total = 7, current }: ProgressDotsProps) {
 }
 
 /** All-complete variant for the terminal handoff screen (all gold.ink50). */
-export function ProgressDotsComplete({ total = 7 }: { total?: number }) {
+export function ProgressDotsComplete({ total = 8 }: { total?: number }) {
   return (
     <View style={styles.row}>
       {Array.from({ length: total }, (_, index) => (

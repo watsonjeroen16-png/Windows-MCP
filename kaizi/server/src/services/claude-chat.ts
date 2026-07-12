@@ -11,12 +11,32 @@
  *   - Thinking off — this is a fast conversational reply, not a reasoning
  *     task, so the `thinking` param is omitted entirely.
  *   - max_tokens ~300 — short, speech-bubble-length replies.
- *   - System prompt: stable block (companion identity + personality voice)
- *     gets `cache_control: {type: "ephemeral"}` since it repeats
- *     identically across a user's messages; the volatile memory digest goes
- *     in a second system block *after* the cache breakpoint, per current
- *     Anthropic prompt-caching guidance (stable content before the
- *     breakpoint, volatile content after).
+ *   - System prompt: three blocks, per personalization-spec.md section 3.3
+ *     (extends the original two-block design):
+ *       1. Stable block (companion identity + personality voice) —
+ *          `cache_control: {type: "ephemeral"}`. Repeats identically across
+ *          a user's messages.
+ *       2. Quiz-derived profile digest (personalization-spec.md section
+ *          3.4) — its own `cache_control: {type: "ephemeral"}` breakpoint.
+ *          Changes only when a user retakes the quiz or edits their
+ *          goals/companion (rare), so it's cache-stable like block 1, but
+ *          kept as a separate breakpoint so a chat turn that only changed
+ *          today's unkept-intentions list still reads blocks 1+2 from
+ *          cache. Omitted entirely (falls back to the old two-block shape)
+ *          when there's no quiz digest for this user.
+ *       3. Volatile block (today's unkept intentions, etc.) — no
+ *          `cache_control`, per "stable content before the breakpoint,
+ *          volatile content after."
+ *     Screen-time (personalization-spec.md section 2) is cut by founder
+ *     decision — there is no screen-time content anywhere in this prompt.
+ *   - Cache diagnostics: `usage.cache_creation_input_tokens` /
+ *     `usage.cache_read_input_tokens` are logged on every real API call
+ *     (see logCacheUsage below) per personalization-spec.md section 3.3's
+ *     instruction to verify empirically whether adding the quiz digest
+ *     pushes the stable prefix over the model's cacheable-prefix minimum
+ *     (see shared/prompt-caching.md: 4096 tokens for claude-opus-4-8),
+ *     rather than assuming the existing cache_control marker was ever
+ *     producing reads.
  *   - Mock mode: if ANTHROPIC_API_KEY is unset, return a canned in-voice
  *     line instead of calling the API — same idea as services/twilio.ts's
  *     mock mode, so the app and tests work with zero API key. Reads the key
@@ -101,6 +121,22 @@ export interface CompanionReplyInput {
   /** Compact digest: goals, identity "why", today's unkept intentions, etc. Kept short. */
   memoryDigest: string;
   userMessage: string;
+  /**
+   * Quiz-derived profile digest (personalization-spec.md section 3.4),
+   * already rendered to text by services/quiz-digest.ts's
+   * buildQuizProfileDigest — this module doesn't build it itself, to keep
+   * the chat/quiz concerns decoupled. Optional/empty is a normal state (no
+   * quiz on file, or the user skipped it) and simply omits the second
+   * system block, falling back to the original two-block shape.
+   */
+  quizDigest?: string;
+}
+
+/** One system-prompt block, in the shape the Anthropic SDK expects. */
+export interface SystemBlock {
+  type: "text";
+  text: string;
+  cache_control?: { type: "ephemeral" };
 }
 
 /** Deterministic-but-varied pick so mock mode isn't always the same line, without needing randomness. */
@@ -125,6 +161,68 @@ function buildStableSystemBlock(input: CompanionReplyInput): string {
 }
 
 /**
+ * Builds the full system-block array for a companion chat call — pure and
+ * exported so its shape (block count, cache_control placement, ordering) is
+ * unit-testable without a live API call. See CompanionReplyInput.quizDigest
+ * for why block 2 is conditional.
+ */
+export function buildSystemBlocks(input: CompanionReplyInput): SystemBlock[] {
+  const stableBlock = buildStableSystemBlock(input);
+  const memoryBlock =
+    input.memoryDigest.trim().length > 0
+      ? `Here is what you remember about this user right now (keep it in mind, don't recite it verbatim):\n${input.memoryDigest.trim()}`
+      : "You don't have any stored memory about this user yet.";
+  const quizDigest = input.quizDigest?.trim();
+
+  const blocks: SystemBlock[] = [
+    // Block 1 — stable companion identity/voice, unchanged from the
+    // original two-block design. Repeats identically across this user's
+    // messages, so it gets its own cache breakpoint.
+    { type: "text", text: stableBlock, cache_control: { type: "ephemeral" } },
+  ];
+
+  if (quizDigest && quizDigest.length > 0) {
+    // Block 2 — quiz-derived profile digest (personalization-spec.md
+    // section 3.4). Also cache_control'd: quiz answers change only on a
+    // quiz retake or a goals/companion edit, which is rare, so this block
+    // is stable across a large number of chat turns just like block 1. Its
+    // own breakpoint means a turn that only changed block 3 (today's unkept
+    // intentions) still gets a cache read on everything before it.
+    blocks.push({ type: "text", text: quizDigest, cache_control: { type: "ephemeral" } });
+  }
+
+  // Final block — volatile memory digest (today's unkept intentions, etc.),
+  // no cache_control, per "stable content before the breakpoint, volatile
+  // content after."
+  blocks.push({ type: "text", text: memoryBlock });
+
+  return blocks;
+}
+
+/**
+ * Logs cache_creation_input_tokens / cache_read_input_tokens from a real API
+ * response, per personalization-spec.md section 3.3's instruction to verify
+ * empirically (not assume) whether prompt caching is actually firing —
+ * adding the quiz digest block may be what first pushes the stable prefix
+ * over the model's cacheable-prefix minimum (4096 tokens for
+ * claude-opus-4-8; see shared/prompt-caching.md). Exported so it can be
+ * unit-tested independent of a live API call.
+ */
+export function logCacheUsage(usage: {
+  input_tokens: number;
+  cache_creation_input_tokens?: number | null;
+  cache_read_input_tokens?: number | null;
+}): void {
+  const created = usage.cache_creation_input_tokens ?? 0;
+  const read = usage.cache_read_input_tokens ?? 0;
+  console.log(
+    `[claude-chat] cache usage — input_tokens=${usage.input_tokens} ` +
+      `cache_creation_input_tokens=${created} cache_read_input_tokens=${read} ` +
+      `(${read > 0 ? "cache HIT" : created > 0 ? "cache WRITE, no prior read" : "not cached — below minimum prefix or no cache_control effect"})`
+  );
+}
+
+/**
  * Call the Claude API for a single companion reply, or fall back to a mock
  * in-voice line when ANTHROPIC_API_KEY is unset.
  */
@@ -138,25 +236,15 @@ export async function getCompanionReply(input: CompanionReplyInput): Promise<str
   const { default: Anthropic } = await import("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey });
 
-  const stableBlock = buildStableSystemBlock(input);
-  const memoryBlock = input.memoryDigest.trim().length > 0
-    ? `Here is what you remember about this user right now (keep it in mind, don't recite it verbatim):\n${input.memoryDigest.trim()}`
-    : "You don't have any stored memory about this user yet.";
-
   try {
     const response = await client.messages.create({
       model: MODEL,
       max_tokens: MAX_TOKENS,
-      // Stable identity/voice block first with a cache breakpoint (repeats
-      // identically across this user's messages); volatile memory digest
-      // goes in a second block after the breakpoint, per prompt-caching
-      // guidance (stable content before the breakpoint, volatile after).
-      system: [
-        { type: "text", text: stableBlock, cache_control: { type: "ephemeral" } },
-        { type: "text", text: memoryBlock },
-      ],
+      system: buildSystemBlocks(input),
       messages: [{ role: "user", content: input.userMessage }],
     });
+
+    logCacheUsage(response.usage);
 
     const textBlock = response.content.find(
       (block): block is Extract<(typeof response.content)[number], { type: "text" }> =>

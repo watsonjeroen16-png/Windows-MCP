@@ -4,7 +4,7 @@
  * and production wires the pg-backed implementation from ./index.ts.
  */
 
-import type { Companion, Environment, Goal, Personality } from "../schemas.js";
+import type { Companion, Environment, Goal, Personality, QuizAnswers } from "../schemas.js";
 
 export interface UserRow {
   id: string;
@@ -52,6 +52,26 @@ export interface UserWithProfile {
   smsPrefs: SmsPreferencesRow | null;
 }
 
+export interface QuizResponsesRow {
+  user_id: string;
+  quiz_version: number;
+  answers: QuizAnswers;
+  skipped_entirely: boolean;
+  completed_at: Date | null;
+  created_at: Date;
+  updated_at: Date;
+}
+
+export interface QuizResponsesUpsertInput {
+  answers: QuizAnswers;
+  skippedEntirely: boolean;
+}
+
+export interface QuizResponsesUpsertResult {
+  created: boolean;
+  row: QuizResponsesRow;
+}
+
 export interface Db {
   getUserByPhone(phone: string): Promise<UserRow | null>;
   /** Insert-or-update user by phone, stamping phone_verified_at = now(). */
@@ -69,5 +89,18 @@ export interface Db {
    * and both trigger a real Twilio send.
    */
   markWelcomed(userId: string): Promise<boolean>;
+
+  // Onboarding quiz (personalization-spec.md section 1). Upsert is
+  // idempotent: re-submitting for the same user replaces the previous
+  // answers, mirroring upsertProfile's re-post semantics. `completed_at` is
+  // stamped now() on every upsert (a full submission — a skip records
+  // skippedEntirely instead of leaving completed_at null, since "the user
+  // finished this onboarding step" is true either way).
+  upsertQuizResponses(
+    userId: string,
+    input: QuizResponsesUpsertInput
+  ): Promise<QuizResponsesUpsertResult>;
+  getQuizResponses(userId: string): Promise<QuizResponsesRow | null>;
+
   close(): Promise<void>;
 }

@@ -18,7 +18,7 @@ export function PersonalitySelectionScreen() {
 
   return (
     <OnboardingScreen
-      step={5}
+      step={6}
       direction={state.direction}
       onBack={() => dispatch({ kind: "back" })}
       cta={

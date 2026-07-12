@@ -46,6 +46,7 @@ export function createMemoryWorldDb(): MemoryWorldDb {
         reward_growth: input.rewardGrowth,
         scheduled_for: input.scheduledFor,
         status: "pending",
+        source: input.source ?? "user",
         created_at: new Date(),
         kept_at: null,
       };

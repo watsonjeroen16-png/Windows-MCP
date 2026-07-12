@@ -53,7 +53,7 @@ export function CompanionSelectionScreen() {
 
   return (
     <OnboardingScreen
-      step={4}
+      step={5}
       direction={state.direction}
       onBack={() => dispatch({ kind: "back" })}
       cta={

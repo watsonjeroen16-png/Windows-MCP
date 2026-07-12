@@ -83,3 +83,109 @@ export const profileSchema = z.object({
 export const welcomeSchema = z.object({});
 
 export type ProfileInput = z.infer<typeof profileSchema>;
+
+// ---------------------------------------------------------------------------
+// Onboarding quiz (personalization-spec.md section 1). All 10 questions are
+// chip-based and skippable — every field below is optional, matching the
+// spec's "unanswered/skipped questions are simply absent" rule. Screen-time
+// (spec section 2) is cut by founder decision and has no schema here.
+//
+// Q1 (focusGoal) is dynamic per spec section 1.3 — its chip options are the
+// user's own goals[] from onboarding plus a literal "all of it" catch-all —
+// so it's validated as one of the known GOALS or the literal "all" rather
+// than a fixed enum of its own.
+// ---------------------------------------------------------------------------
+
+export const QUIZ_STARTING_POINTS = [
+  "just_starting",
+  "restarting",
+  "consistent_level_up",
+  "already_disciplined",
+] as const;
+
+export const QUIZ_OBSTACLES = [
+  "motivation_dips",
+  "not_enough_time",
+  "dont_know_where_to_start",
+  "distractions",
+  "self_doubt",
+  "inconsistency",
+] as const;
+
+export const QUIZ_SUPPORT_STYLES = [
+  "gentle_nudge",
+  "direct",
+  "celebrate_wins",
+  "hands_off",
+] as const;
+
+export const QUIZ_AVAILABILITY = [
+  "early_morning",
+  "midday",
+  "evening",
+  "late_night",
+  "varies",
+] as const;
+
+export const QUIZ_MOTIVATION_STYLES = [
+  "discipline_routine",
+  "visible_progress",
+  "someone_in_corner",
+  "competition",
+] as const;
+
+export const QUIZ_PAST_ATTEMPTS = [
+  "never_tried",
+  "tried_apps_didnt_stick",
+  "tried_with_person_helped",
+  "know_what_works_dont_do_it",
+] as const;
+
+export const QUIZ_CONFIDENCE_LEVELS = ["not_very", "somewhat", "fairly", "very"] as const;
+
+export const QUIZ_RHYTHMS = [
+  "same_daily",
+  "flexible",
+  "structured_weekdays_loose_weekends",
+] as const;
+
+export const QUIZ_NINETY_DAY_VISIONS = [
+  "streak_proud_of",
+  "measurable_result",
+  "feeling_in_control",
+  "proof_of_followthrough",
+] as const;
+
+export const quizAnswersSchema = z
+  .object({
+    // Q1 — dynamic options (user's own goals[] + "all"), so it's a bounded
+    // string rather than a z.enum of its own fixed set.
+    focusGoal: z.enum([...GOALS, "all"]).optional(),
+    startingPoint: z.enum(QUIZ_STARTING_POINTS).optional(), // Q2
+    obstacle: z.enum(QUIZ_OBSTACLES).optional(), // Q3
+    supportStyle: z.enum(QUIZ_SUPPORT_STYLES).optional(), // Q4
+    availability: z
+      .array(z.enum(QUIZ_AVAILABILITY))
+      .min(1, "availability must have at least one selection")
+      .max(QUIZ_AVAILABILITY.length)
+      .refine((a) => new Set(a).size === a.length, "availability must be unique")
+      .optional(), // Q5, multi-select
+    motivationStyle: z.enum(QUIZ_MOTIVATION_STYLES).optional(), // Q6
+    pastAttempts: z.enum(QUIZ_PAST_ATTEMPTS).optional(), // Q7
+    confidence: z.enum(QUIZ_CONFIDENCE_LEVELS).optional(), // Q8
+    rhythm: z.enum(QUIZ_RHYTHMS).optional(), // Q9
+    ninetyDayVision: z.enum(QUIZ_NINETY_DAY_VISIONS).optional(), // Q10
+  })
+  .strict();
+
+export type QuizAnswers = z.infer<typeof quizAnswersSchema>;
+
+// POST /api/onboarding/quiz body. `skippedEntirely: true` (the "Skip quiz"
+// affordance on card 1) records the quiz was declined without turning it
+// into a 400 for an empty `answers` object — both are valid submissions.
+export const submitQuizSchema = z.object({
+  answers: quizAnswersSchema.default({}),
+  skippedEntirely: z.boolean().optional().default(false),
+});
+
+export type SubmitQuizInput = z.infer<typeof submitQuizSchema>;

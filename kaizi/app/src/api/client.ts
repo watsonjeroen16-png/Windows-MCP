@@ -91,6 +91,24 @@ async function post<TBody extends object>(
   body: TBody,
   token?: string | null
 ): Promise<Response | null> {
+  return httpRequest("POST", path, body, token);
+}
+
+/**
+ * Shared fetch wrapper for the World endpoints (intentions/chat/customization/
+ * journal — world-build-plan.md). Same https-only / no-fabricated-offline-
+ * success rules as `post()` above (L-5/L-6): these calls require a real
+ * session token, and there is no meaningful offline mock for a companion
+ * chat reply or a user's intentions list, so an unreachable server or an
+ * unsafe base URL simply surfaces as `null` (a real failure) — callers
+ * render an error state rather than fabricated data.
+ */
+async function httpRequest<TBody extends object | undefined = undefined>(
+  method: "GET" | "POST" | "PUT",
+  path: string,
+  body?: TBody,
+  token?: string | null
+): Promise<Response | null> {
   if (!BASE_URL) {
     warnOffline("EXPO_PUBLIC_API_URL is not set");
     return null;
@@ -105,17 +123,26 @@ async function post<TBody extends object>(
     return null;
   }
   try {
-    const headers: Record<string, string> = { "Content-Type": "application/json" };
+    const headers: Record<string, string> = {};
     if (token) headers.Authorization = `Bearer ${token}`;
+    if (body !== undefined) headers["Content-Type"] = "application/json";
     return await fetch(`${BASE_URL}${path}`, {
-      method: "POST",
+      method,
       headers,
-      body: JSON.stringify(body),
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch (err) {
     warnOffline(`request to ${path} failed (${err instanceof Error ? err.message : String(err)})`);
     return null;
   }
+}
+
+function get(path: string, token: string): Promise<Response | null> {
+  return httpRequest("GET", path, undefined, token);
+}
+
+function put<TBody extends object>(path: string, body: TBody, token: string): Promise<Response | null> {
+  return httpRequest("PUT", path, body, token);
 }
 
 /** POST /api/verify/start — ask the backend to text a verification code. */
