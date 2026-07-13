@@ -7,11 +7,13 @@ Express + TypeScript backend. Two builds live in this codebase (see
    persistence (PostgreSQL), and the personality-toned first companion SMS
    (Twilio Messaging) — four endpoints under `/api/verify`, `/api/onboarding`,
    `/api/sms`.
-2. **Companion World** (in progress, see `../docs/design/world-build-plan.md`):
-   Intentions, companion chat (real Claude API), post-onboarding customization,
-   and the Reflection journal — four more endpoint groups under
-   `/api/intentions`, `/api/chat`, `/api/customization`, `/api/journal`, all
-   requiring the same session-token auth as onboarding.
+2. **Companion World** (shipped): Intentions (user-authored and AI-generated
+   via `POST /api/intentions/generate`), companion chat (real Claude API),
+   the onboarding personalization quiz (`POST /api/onboarding/quiz`),
+   post-onboarding customization, and the Reflection journal — endpoint
+   groups under `/api/intentions`, `/api/chat`, `/api/customization`,
+   `/api/journal`, `/api/onboarding/quiz`, all requiring the same
+   session-token auth as onboarding.
 
 ## Setup
 
