@@ -93,7 +93,10 @@ deferred or changed from the original plan.
       layout, how to run both locally, and what's real vs. stubbed.
 - [x] Confirm nothing here touches `src/windows_mcp` or repo-root tooling
       configs (this repo's `pyproject.toml`, `ruff` config, etc. stay untouched).
-- [ ] Commit and push to `claude/arbitrage-search-website-c0pvs5`.
+- [x] Ran backend (`uvicorn`) and frontend (`next dev`) together in this
+      session and confirmed the dashboard actually reaches the API (CORS
+      verified, `/api/health` and `/api/opportunities` both round-trip).
+- [x] Commit and push to `claude/arbitrage-search-website-c0pvs5`.
 
 ## Next steps after this pass (not started, for a future session)
 
