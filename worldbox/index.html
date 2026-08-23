@@ -1,0 +1,1194 @@
+<title>Emberwick Isle</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;600&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#0e161b; --panel:#15222a; --panel-2:#1b2b35; --line:#264049;
+    --ink:#e9e2cf; --muted:#8da49e; --gold:#f0b53f; --ember:#e2574c;
+    --leaf:#7fb069; --sky:#8fb7d1; --belly:#e8a13c;
+    --display:"Pixelify Sans","IBM Plex Sans",sans-serif;
+    --body:"IBM Plex Sans",system-ui,sans-serif;
+    --mono:"IBM Plex Mono",ui-monospace,monospace;
+  }
+  html,body{height:100%}
+  body{
+    background:var(--bg); color:var(--ink); font-family:var(--body);
+    margin:0; overflow:hidden;
+  }
+  #app{display:flex; flex-direction:column; height:100vh; height:100dvh}
+
+  /* ---------- header ---------- */
+  header{
+    display:flex; align-items:center; gap:14px; padding:8px 14px;
+    background:var(--panel); border-bottom:1px solid var(--line); flex:none;
+  }
+  header h1{
+    font-family:var(--display); font-weight:600; font-size:20px; letter-spacing:1px;
+    color:var(--gold); margin:0; text-transform:uppercase; white-space:nowrap;
+  }
+  .chip{
+    font-family:var(--mono); font-size:12px; color:var(--muted);
+    background:var(--panel-2); border:1px solid var(--line); border-radius:4px;
+    padding:3px 8px; white-space:nowrap; font-variant-numeric:tabular-nums;
+  }
+  .chip b{color:var(--ink); font-weight:500}
+  #stats{display:flex; gap:8px; flex-wrap:wrap; align-items:center}
+  #speed{margin-left:auto; display:flex; gap:4px}
+  #speed button{
+    font-family:var(--display); font-size:14px; color:var(--muted);
+    background:var(--panel-2); border:1px solid var(--line); border-radius:4px;
+    width:36px; height:28px; cursor:pointer; padding:0;
+  }
+  #speed button.on{color:var(--bg); background:var(--gold); border-color:var(--gold)}
+  #speed button:focus-visible{outline:2px solid var(--gold); outline-offset:1px}
+
+  /* ---------- main ---------- */
+  main{display:flex; flex:1; min-height:0}
+  #stage{flex:1; position:relative; min-width:0; background:#2a64b4}
+  #view{position:absolute; inset:0; width:100%; height:100%; display:block; touch-action:none; cursor:grab}
+  #view:active{cursor:grabbing}
+  #hint{
+    position:absolute; left:10px; bottom:8px; font-family:var(--mono); font-size:11px;
+    color:#cfe4de; background:rgba(14,22,27,.72); border:1px solid var(--line);
+    border-radius:4px; padding:4px 8px; pointer-events:none;
+  }
+  #splash{
+    position:absolute; inset:0; z-index:10; display:flex; align-items:center; justify-content:center;
+    background:rgba(8,13,17,.55); pointer-events:none; text-align:center;
+  }
+  #splash .box{display:flex; flex-direction:column; gap:8px; padding:0 20px}
+  #splash h2{
+    font-family:var(--display); font-weight:600; font-size:clamp(30px,6vw,46px);
+    letter-spacing:2px; color:var(--gold); margin:0; text-transform:uppercase;
+    text-shadow:0 2px 12px rgba(0,0,0,.6); text-wrap:balance;
+  }
+  #splash p{margin:0; color:#e9e2cf; font-size:14px; text-shadow:0 1px 6px rgba(0,0,0,.7)}
+  #splash.bye{transition:opacity 1.6s; opacity:0}
+  @media (prefers-reduced-motion: reduce){ #splash.bye{transition:none} }
+
+  /* ---------- sidebar ---------- */
+  #side{
+    width:236px; flex:none; background:var(--panel); border-left:1px solid var(--line);
+    display:flex; flex-direction:column; gap:8px; padding:10px; overflow-y:auto;
+  }
+  #side h2{
+    font-family:var(--display); font-size:13px; font-weight:600; letter-spacing:1.5px;
+    text-transform:uppercase; color:var(--muted); margin:0;
+  }
+  .card{
+    background:var(--panel-2); border:1px solid var(--line); border-radius:6px;
+    padding:8px; cursor:pointer; display:flex; flex-direction:column; gap:6px; flex:none;
+  }
+  .card.sel{border-color:var(--gold)}
+  .card.dead{opacity:.55}
+  .card .top{display:flex; gap:8px; align-items:center}
+  .card canvas{width:36px; height:36px; image-rendering:pixelated; background:#101c23; border-radius:4px; flex:none}
+  .card .who{min-width:0}
+  .card .name{font-family:var(--display); font-size:15px; letter-spacing:.5px}
+  .card .role{font-size:11px; color:var(--muted)}
+  .card .doing{
+    font-family:var(--mono); font-size:10.5px; color:#b9cfc8;
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .bars{display:flex; flex-direction:column; gap:3px}
+  .bar{height:5px; background:#0d1519; border-radius:2px; overflow:hidden}
+  .bar i{display:block; height:100%; border-radius:2px; transition:width .3s}
+  .bar.hp i{background:var(--ember)} .bar.belly i{background:var(--belly)} .bar.zz i{background:var(--sky)}
+
+  /* ---------- log ---------- */
+  #log{
+    flex:none; height:104px; overflow-y:auto; background:#101a20;
+    border-top:1px solid var(--line); padding:6px 12px;
+    font-family:var(--mono); font-size:11.5px; line-height:1.75; color:var(--muted);
+  }
+  #log .day{color:#5f7a74; margin-right:6px}
+  #log .good{color:var(--leaf)} #log .bad{color:var(--ember)} #log .god{color:var(--gold)}
+
+  /* ---------- narrow screens ---------- */
+  @media (max-width:860px){
+    main{flex-direction:column}
+    #stage{flex:1; min-height:260px}
+    #side{width:auto; flex-direction:row; overflow-x:auto; border-left:none; border-top:1px solid var(--line); padding:8px}
+    #side h2{display:none}
+    .card{width:168px}
+    #log{height:70px}
+    header h1{font-size:16px}
+  }
+</style>
+
+<div id="app">
+  <header>
+    <h1>Emberwick Isle</h1>
+    <div id="stats">
+      <span class="chip" id="st-day"><b>Day 1</b> · dawn</span>
+      <span class="chip" id="st-weather">☀️ clear</span>
+      <span class="chip" id="st-pop">souls <b>4</b></span>
+      <span class="chip" id="st-wood">wood <b>0</b></span>
+      <span class="chip" id="st-food">food <b>6</b></span>
+    </div>
+    <div id="speed">
+      <button data-s="0" title="Pause">⏸</button>
+      <button data-s="1" class="on" title="Normal speed">1×</button>
+      <button data-s="2" title="Double speed">2×</button>
+      <button data-s="4" title="Quadruple speed">4×</button>
+    </div>
+  </header>
+  <main>
+    <div id="stage">
+      <canvas id="view"></canvas>
+      <div id="hint">sit back — the isle lives on its own · drag to look around · scroll to zoom</div>
+      <div id="splash">
+        <div class="box">
+          <h2>Emberwick Isle</h2>
+          <p>Four small lives on a speck of land. Nothing is asked of you but to watch.</p>
+        </div>
+      </div>
+    </div>
+    <aside id="side">
+      <h2>The Islanders</h2>
+    </aside>
+  </main>
+  <div id="log" aria-live="polite"></div>
+</div>
+
+<script>
+'use strict';
+/* ============================== world constants ============================== */
+const W=96, H=64, T=16, SEED=31415, DAY=100;
+const DEEP=0, WATER=1, SAND=2, GRASS=3, DIRT=4, ROCK=5, SNOW=6;
+const OV_NONE=0, OV_TREE=1, OV_BERRY=2, OV_TENT=3, OV_GRAVE=4, OV_FIRE_PIT=5;
+const TENT_COST=12, MAX_TENTS=4;
+const idx=(x,y)=>y*W+x, inMap=(x,y)=>x>=0&&y>=0&&x<W&&y<H;
+const clamp=(v,a,b)=>v<a?a:v>b?b:v;
+const dist=(ax,ay,bx,by)=>Math.hypot(ax-bx,ay-by);
+
+/* ============================== rng + noise ============================== */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+const rng=mulberry32(SEED), R=()=>rng(); // world-gen stream
+const rr=mulberry32(SEED^0x9e3779b9);    // runtime stream
+const rand=()=>rr(), pick=a=>a[Math.floor(rand()*a.length)];
+function makeNoise(seed){
+  const r=mulberry32(seed), G=64, grid=new Float32Array(G*G);
+  for(let i=0;i<G*G;i++)grid[i]=r();
+  const at=(x,y)=>grid[((y%G+G)%G)*G+((x%G+G)%G)], sm=t=>t*t*(3-2*t);
+  function val(x,y){
+    const xi=Math.floor(x),yi=Math.floor(y),xf=x-xi,yf=y-yi;
+    const a=at(xi,yi),b=at(xi+1,yi),c=at(xi,yi+1),d=at(xi+1,yi+1);
+    const u=sm(xf),v=sm(yf);
+    return a+(b-a)*u+(c-a)*v+(a-b-c+d)*u*v;
+  }
+  return (x,y)=>{let s=0,amp=1,f=1,n=0;for(let o=0;o<4;o++){s+=val(x*f,y*f)*amp;n+=amp;amp*=.5;f*=2}return s/n-.5};
+}
+
+/* ============================== map generation ============================== */
+const tiles=new Uint8Array(W*H), overlay=new Uint8Array(W*H);
+const biome=new Uint8Array(W*H);   // 0 meadow, 1 savanna
+const biomeMix=new Uint8Array(W*H);// 1 = dithered transition band
+const treeKind=new Uint8Array(W*H);// 0 green 1 orange 2 mixed 3 baobab 4 palm 5 dead
+{
+  const fbm=makeNoise(SEED), bio=makeNoise(SEED+31);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const nx=x/W-.5, ny=y/H-.5, d=Math.sqrt(nx*nx+ny*ny*1.9)*1.55;
+    const h=fbm(x*.055,y*.055)*.95-d*d*.95+.30;
+    tiles[idx(x,y)] = h<-.16?DEEP : h<-.055?WATER : h<0?SAND : h<.26?GRASS : h<.34?ROCK : SNOW;
+    const b=bio(x*.035+50,y*.035+50)+ (y/H-.5)*.25; // savanna to the south
+    biome[idx(x,y)]=b>0?1:0;
+  }
+  /* dither only the one-tile border where the two grasslands meet */
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const b=biome[idx(x,y)];
+    for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++)
+      if(inMap(x+dx,y+dy)&&biome[idx(x+dx,y+dy)]!==b)biomeMix[idx(x,y)]=1;
+  }
+  const forest=makeNoise(SEED+77);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=idx(x,y);
+    if(tiles[i]===GRASS && forest(x*.13+9,y*.13+9)>.06 && R()<.5){
+      overlay[i]=OV_TREE;
+      const r=R();
+      treeKind[i]= biome[i]===1 ? (r<.38?1:r<.62?2:r<.82?3:r<.92?0:5)
+                                : (r<.55?0:r<.8?1:r<.95?2:5);
+    } else if(tiles[i]===SAND && R()<.06){
+      const wn=(inMap(x+1,y)&&tiles[idx(x+1,y)]<=WATER)||(inMap(x-1,y)&&tiles[idx(x-1,y)]<=WATER)||
+               (inMap(x,y+1)&&tiles[idx(x,y+1)]<=WATER)||(inMap(x,y-1)&&tiles[idx(x,y-1)]<=WATER);
+      if(wn){overlay[i]=OV_TREE;treeKind[i]=4}
+    }
+  }
+}
+const treeHP=new Map(); // idx -> chops remaining (default 3)
+const rocks=[];         // decor, non-blocking
+for(let n=0;n<26;n++){
+  const x=2+Math.floor(R()*(W-4)), y=2+Math.floor(R()*(H-4)), i=idx(x,y);
+  if(tiles[i]===GRASS&&!overlay[i])rocks.push({x,y,big:R()<.4});
+}
+const passable=i=>{const t=tiles[i];return (t===SAND||t===GRASS||t===DIRT)&&overlay[i]!==OV_TENT&&overlay[i]!==OV_FIRE_PIT};
+
+/* village center: greenest spot near the middle of the land */
+let campX=0, campY=0;
+{
+  let best=-1;
+  for(let y=8;y<H-8;y++)for(let x=8;x<W-8;x++){
+    if(tiles[idx(x,y)]!==GRASS||overlay[idx(x,y)])continue;
+    let s=0;
+    for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){
+      const i=idx(x+dx,y+dy);
+      if(tiles[i]===GRASS)s+=overlay[i]===OV_TREE?.6:1;
+    }
+    s-=dist(x,y,W*.5,H*.5)*.8;
+    if(s>best){best=s;campX=x;campY=y}
+  }
+  overlay[idx(campX,campY)]=OV_FIRE_PIT;
+}
+function freeNear(cx,cy,rad,cond){
+  for(let tries=0;tries<200;tries++){
+    const x=cx+Math.floor((R()-.5)*2*rad), y=cy+Math.floor((R()-.5)*2*rad);
+    if(inMap(x,y)&&cond(idx(x,y)))return {x,y};
+  }
+  return null;
+}
+/* berry bushes, first tent, drying rack */
+const berries=new Map(); // idx -> charges
+for(let n=0;n<12;n++){
+  const p=freeNear(campX,campY,13,i=>tiles[i]===GRASS&&!overlay[i]);
+  if(p){overlay[idx(p.x,p.y)]=OV_BERRY;berries.set(idx(p.x,p.y),3)}
+}
+const tents=[]; // {x,y,progress(0..1)}
+{
+  const p=freeNear(campX,campY,4,i=>tiles[i]===GRASS&&!overlay[i]);
+  if(p){overlay[idx(p.x,p.y)]=OV_TENT;tents.push({x:p.x,y:p.y,progress:1})}
+}
+let rack=null;
+{
+  const p=freeNear(campX,campY,3,i=>tiles[i]===GRASS&&!overlay[i]);
+  if(p)rack={x:p.x,y:p.y};
+}
+/* shore tiles for fishing */
+const shore=[];
+for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){
+  if(tiles[idx(x,y)]!==SAND)continue;
+  if(tiles[idx(x+1,y)]===WATER||tiles[idx(x-1,y)]===WATER||tiles[idx(x,y+1)]===WATER||tiles[idx(x,y-1)]===WATER)
+    shore.push({x,y});
+}
+shore.sort((a,b)=>dist(a.x,a.y,campX,campY)-dist(b.x,b.y,campX,campY));
+
+/* ============================== inhabitants ============================== */
+function villager(name,role,tunic,hair,dx,dy){
+  return {name,role,tunic,hair,x:campX+dx,y:campY+dy,hp:role==="warden"?120:80,maxhp:role==="warden"?120:80,
+    hunger:20+rand()*15,energy:80+rand()*20,carryWood:0,carryFood:0,alive:true,
+    state:"idle",tx:0,ty:0,after:null,timer:0,stuck:0,walk:0,moving:false,
+    moodT:8+rand()*14,swing:0};
+}
+const V=[
+  villager("Bram","builder","#8a5a33","#3b2a1c",-1.5,.5),
+  villager("Wren","forager","#5d8a4a","#a3502e", 1.5,-.5),
+  villager("Sylla","fisher","#4a6d8a","#e8d28a",-.5,1.5),
+  villager("Odo","warden","#8a4a4a","#514f4e", .5,-1.5),
+];
+const animals=[]; // {kind,x,y,hp,state,tgt,timer,walk,moving}
+function spawnAnimal(kind,x,y){animals.push({kind,x,y,hp:kind==="wolf"?45:30,state:"wander",tgt:null,timer:rand()*3,walk:0,moving:false})}
+for(let n=0;n<6;n++){const p=freeNear(campX,campY,20,i=>tiles[i]===GRASS&&!overlay[i]);if(p)spawnAnimal("sheep",p.x,p.y)}
+{const p=freeNear(campX>W/2?18:W-18,campY,10,i=>tiles[i]===GRASS&&!overlay[i]);if(p)spawnAnimal("wolf",p.x,p.y)}
+const graves=[]; // {x,y,vi}
+
+/* ============================== world state ============================== */
+let wood=0, food=6, t0=DAY*.15, speed=1, running=true;
+const burn=new Map(); // idx -> fuel
+const particles=[];  // {x,y,vx,vy,life,max,color,size}
+const moods=[];      // {x,y,t,max,emoji}
+const strikes=[];    // {x,y,t}
+let regrowT=0, spreadT=0, wildT=30+rand()*30;
+let weather="clear", weatherT=60+rand()*60, boltT=0; // clear | rain | storm
+const day=()=>Math.floor(t0/DAY)+1, phase=()=>(t0%DAY)/DAY;
+const daylight=()=>clamp(Math.sin(phase()*Math.PI*2)*1.4+.55,0,1); // phase 0 dawn, .25 noon, ~.6–.95 night
+const isNight=()=>daylight()<.3;
+
+/* ============================== log + stats ============================== */
+const logEl=document.getElementById('log');
+function log(msg,cls){
+  const d=document.createElement('div');
+  if(cls)d.className=cls;
+  d.innerHTML=`<span class="day">D${day()}</span>${msg}`;
+  logEl.prepend(d);
+  while(logEl.children.length>60)logEl.lastChild.remove();
+}
+const stDay=document.getElementById('st-day'), stPop=document.getElementById('st-pop'),
+      stWood=document.getElementById('st-wood'), stFood=document.getElementById('st-food'),
+      stWeather=document.getElementById('st-weather');
+function phaseName(){const p=phase();return p<.06||p>.96?"dawn":p<.42?"day":p<.56?"dusk":p<.8?"night":"late night"}
+function refreshStats(){
+  stDay.innerHTML=`<b>Day ${day()}</b> · ${phaseName()}`;
+  stWeather.textContent=weather==="clear"?"☀️ clear":weather==="rain"?"🌧 rain":"⛈ storm";
+  stPop.innerHTML=`souls <b>${V.filter(v=>v.alive).length}</b>`;
+  stWood.innerHTML=`wood <b>${Math.floor(wood)}</b>`;
+  stFood.innerHTML=`food <b>${Math.floor(food)}</b>`;
+}
+
+/* ============================== terrain cache ============================== */
+const terrain=document.createElement('canvas');
+terrain.width=W*T; terrain.height=H*T;
+const tctx=terrain.getContext('2d');
+/* [base, altChecker, speckle] per tile look */
+const MEADOW=["#6da44a","#63993f","#558a37"], SAVANNA=["#d3a441","#c8983a","#b0842e"];
+const COLS={
+  [DEEP]:["#2a64b4","#2f6cbc","#3d7ecd"], [WATER]:["#4a90dc","#519be4","#74b2ec"],
+  [SAND]:["#e8d491","#dfc87e","#cdb46a"], [DIRT]:["#ab8148","#9f7641","#8f6a3a"],
+  [ROCK]:["#8a8f94","#7f858a","#6f757a"], [SNOW]:["#eef1f4","#e4e9ee","#d4dbe2"],
+};
+COLS[WATER]=["#4a90dc","#5599e4","#74b2ec"];
+const hash=(x,y)=>{let h=(x*374761393+y*668265263)^SEED;h=(h^h>>13)*1274126177;return((h^h>>16)>>>0)/4294967296};
+function tileCols(i){
+  if(tiles[i]===GRASS)return biome[i]?SAVANNA:MEADOW;
+  return COLS[tiles[i]];
+}
+function paintTile(x,y){
+  const i=idx(x,y), tt=tiles[i], h=hash(x,y);
+  let cols=tileCols(i);
+  /* biome transition band: dither between the two grass palettes */
+  let mix=null;
+  if(tt===GRASS&&biomeMix[i])mix=biome[i]?MEADOW:SAVANNA;
+  const X=x*T, Y=y*T;
+  tctx.fillStyle=cols[0]; tctx.fillRect(X,Y,T,T);
+  /* 4px checker dither */
+  for(let cy=0;cy<4;cy++)for(let cx=0;cx<4;cx++){
+    const on=(cx+cy)%2===0;
+    if(mix&&on&&hash(x*4+cx,y*4+cy)>.35){tctx.fillStyle=mix[0];tctx.fillRect(X+cx*4,Y+cy*4,4,4)}
+    else if(on&&hash(x*4+cx+7,y*4+cy+3)>(tt===ROCK||tt===SNOW?.4:.55)){
+      tctx.fillStyle=cols[1];tctx.fillRect(X+cx*4,Y+cy*4,4,4)}
+  }
+  /* speckles */
+  tctx.fillStyle=cols[2];
+  if(h>.35)tctx.fillRect(X+((h*13)|0)%13,Y+((h*29)|0)%13,2,2);
+  if(h>.72)tctx.fillRect(X+((h*47)|0)%13,Y+((h*7)|0)%13,2,2);
+  /* water: shimmer patches + shore dither */
+  if(tt===WATER||tt===DEEP){
+    if(h>.6){tctx.fillStyle=COLS[tt][2];tctx.fillRect(X+((h*17)|0)%10,Y+((h*31)|0)%12,6,2);
+      tctx.fillRect(X+((h*23)|0)%12,Y+((h*41)|0)%12,2,2)}
+    let sandN=false;
+    for(const[dx,dy]of[[1,0],[-1,0],[0,1],[0,-1]])
+      if(inMap(x+dx,y+dy)&&tiles[idx(x+dx,y+dy)]>=SAND)sandN=true;
+    if(sandN){tctx.fillStyle="#cdb46a";
+      for(let cy=0;cy<4;cy++)for(let cx=0;cx<4;cx++)
+        if((cx+cy)%2===0&&hash(x*4+cx+3,y*4+cy+11)>.45)tctx.fillRect(X+cx*4,Y+cy*4,4,4);
+    }
+  }
+  /* grass tufts (the little sprigs) */
+  if(tt===GRASS&&h>.55){
+    const tx=X+3+((h*37)|0)%8, ty=Y+4+((h*53)|0)%7;
+    tctx.fillStyle=biome[i]?"#eccb62":"#8fc45e";
+    tctx.fillRect(tx,ty,2,5); tctx.fillRect(tx-3,ty+2,2,4); tctx.fillRect(tx+3,ty+1,2,4);
+    tctx.fillStyle=biome[i]?"#c9a94f":"#79aa4e";
+    tctx.fillRect(tx,ty+3,2,2);
+  }
+  if(tt===ROCK){tctx.fillStyle="#9aa0a5";tctx.fillRect(X+((h*11)|0)%9,Y+((h*23)|0)%9,4,2)}
+  /* darker lip where land meets water below */
+  if(tt>=SAND&&y+1<H&&tiles[idx(x,y+1)]<=WATER){
+    tctx.fillStyle="rgba(0,0,0,.2)"; tctx.fillRect(X,Y+T-2,T,2);}
+}
+for(let y=0;y<H;y++)for(let x=0;x<W;x++)paintTile(x,y);
+function setTile(x,y,tt){tiles[idx(x,y)]=tt;paintTile(x,y);if(y>0)paintTile(x,y-1)}
+
+/* ============================== sprites ============================== */
+function mkSprite(w,h,fn){
+  const c=document.createElement('canvas'); c.width=w; c.height=h;
+  const g=c.getContext('2d'); fn(g); return c;
+}
+function blob(g,cx,topY,rows,base,light,dark){
+  let y=topY;
+  for(let r=0;r<rows.length;r++){g.fillStyle=base;g.fillRect(cx-rows[r]/2,y,rows[r],3);y+=3}
+  /* top-left light, bottom rim dark */
+  g.fillStyle=light;
+  g.fillRect(cx-rows[0]/2+2,topY+1,Math.max(4,rows[0]*.45),3);
+  g.fillRect(cx-rows[1]/2+2,topY+4,Math.max(4,rows[1]*.3),2);
+  g.fillStyle=dark;
+  const lr=rows[rows.length-1];
+  g.fillRect(cx-lr/2,topY+rows.length*3-2,lr,2);
+  g.fillRect(cx+rows[1]*.2,topY+4,rows[1]*.25,2);
+}
+function shadow(g,cx,y,w){g.fillStyle="rgba(70,45,15,.35)";g.fillRect(cx-w/2,y,w,4)}
+const SPRITES={};
+/* fluffy trees — anchor: bottom-center of trunk */
+function treeSprite(base,light,dark,trunk,fruit){
+  return mkSprite(28,36,g=>{
+    shadow(g,14,31,20);
+    g.fillStyle=trunk; g.fillRect(12,22,4,10); g.fillRect(11,30,6,2);
+    g.fillStyle="rgba(0,0,0,.25)"; g.fillRect(15,22,1,10);
+    blob(g,14,2,[12,20,24,24,20,14],base,light,dark);
+    if(fruit){g.fillStyle=fruit;
+      g.fillRect(8,6,2,2); g.fillRect(18,4,2,2); g.fillRect(13,12,2,2); g.fillRect(21,10,2,2)}
+  });
+}
+SPRITES.treeGreen =treeSprite("#4f8f3a","#6cae4e","#3a6e2b","#5c4226");
+SPRITES.treeOrange=treeSprite("#cf7028","#e89338","#a35420","#5c4226","#e8b84a");
+SPRITES.treeMixed =treeSprite("#8fa03a","#b3c04c","#6d7c2c","#5c4226","#d84f3a");
+SPRITES.baobab=mkSprite(30,40,g=>{
+  shadow(g,15,35,22);
+  g.fillStyle="#6b4630"; g.fillRect(10,14,10,22); g.fillRect(8,32,14,3);
+  g.fillRect(12,10,6,6);
+  g.fillStyle="#86593c"; g.fillRect(10,14,4,20); g.fillRect(12,10,2,6);
+  g.fillStyle="#523624"; g.fillRect(17,16,3,18);
+  blob(g,15,0,[14,22,20,12],"#5f8f3a","#7cae4e","#47702b");
+});
+SPRITES.palm=mkSprite(30,34,g=>{
+  shadow(g,15,29,16);
+  g.fillStyle="#8a6a44"; g.fillRect(14,12,3,18); g.fillRect(13,10,3,6); g.fillRect(12,28,7,2);
+  g.fillStyle="#4f8f3f";
+  g.fillRect(4,8,10,3); g.fillRect(16,8,10,3);   /* side fronds */
+  g.fillRect(8,3,6,4); g.fillRect(16,3,6,4);     /* upper fronds */
+  g.fillRect(13,1,4,4);
+  g.fillStyle="#3a6e2f"; g.fillRect(4,10,8,2); g.fillRect(18,10,8,2);
+  g.fillStyle="#6b4a2a"; g.fillRect(13,9,2,2); g.fillRect(16,10,2,2); /* coconuts */
+});
+SPRITES.deadTree=mkSprite(24,32,g=>{
+  shadow(g,12,27,14);
+  g.fillStyle="#7a6a55"; g.fillRect(11,10,3,18); g.fillRect(10,26,5,2);
+  g.fillRect(6,8,6,2); g.fillRect(5,4,2,6); g.fillRect(13,6,8,2); g.fillRect(19,2,2,6);
+  g.fillRect(11,6,2,6);
+});
+SPRITES.berry=mkSprite(20,16,g=>{
+  shadow(g,10,12,14);
+  blob(g,10,0,[10,16,14],"#4d7c3d","#639551","#3a5f2e");
+  g.fillStyle="#d84f5a"; g.fillRect(5,4,2,2); g.fillRect(11,2,2,2); g.fillRect(8,7,2,2); g.fillRect(13,6,2,2);
+});
+SPRITES.berryEmpty=mkSprite(20,16,g=>{
+  shadow(g,10,12,14);
+  blob(g,10,0,[10,16,14],"#4d7c3d","#639551","#3a5f2e");
+});
+SPRITES.rock=mkSprite(18,12,g=>{
+  shadow(g,9,8,14);
+  g.fillStyle="#7d8388"; g.fillRect(3,2,12,7); g.fillRect(1,5,16,4);
+  g.fillStyle="#9aa0a5"; g.fillRect(4,2,6,3); g.fillRect(2,5,4,2);
+  g.fillStyle="#5d6368"; g.fillRect(9,6,7,3); g.fillRect(13,4,2,2);
+});
+SPRITES.rockBig=mkSprite(22,16,g=>{
+  shadow(g,11,12,18);
+  g.fillStyle="#7d8388"; g.fillRect(3,2,16,10); g.fillRect(1,7,20,5);
+  g.fillStyle="#9aa0a5"; g.fillRect(4,2,8,4); g.fillRect(2,7,5,3);
+  g.fillStyle="#5d6368"; g.fillRect(12,8,9,4); g.fillRect(16,5,3,3);
+});
+SPRITES.tent=mkSprite(26,24,g=>{
+  shadow(g,13,20,22);
+  g.fillStyle="#6b4a2a"; g.fillRect(10,0,2,6); g.fillRect(14,0,2,6); /* crossed poles */
+  g.fillStyle="#3f8fd4";
+  for(let r=0;r<8;r++){const w=4+r*2.4;g.fillRect(13-w/2,4+r*2,w,2)}
+  g.fillStyle="#2f6fa8";
+  for(let r=2;r<8;r++){const w=4+r*2.4;g.fillRect(13+w/2-4,4+r*2,4,2)}
+  g.fillStyle="#5fa8e4"; g.fillRect(9,8,3,2); g.fillRect(8,12,3,2);
+  g.fillStyle="#16222c"; g.fillRect(10,13,6,7); g.fillRect(11,11,4,2); /* entrance */
+});
+SPRITES.tentHalf=mkSprite(26,24,g=>{
+  shadow(g,13,20,22);
+  g.fillStyle="#6b4a2a"; g.fillRect(10,6,2,6); g.fillRect(14,6,2,6);
+  g.fillStyle="#3f8fd4";
+  for(let r=4;r<8;r++){const w=4+r*2.4;g.fillRect(13-w/2,4+r*2,w,2)}
+  g.fillStyle="#8a5f33"; g.fillRect(4,18,18,2);
+});
+SPRITES.rack=mkSprite(24,18,g=>{
+  g.fillStyle="rgba(70,45,15,.3)"; g.fillRect(2,14,6,3); g.fillRect(16,14,6,3);
+  g.fillStyle="#8a6a44"; g.fillRect(3,3,2,12); g.fillRect(19,3,2,12);
+  g.fillStyle="#a5815a"; g.fillRect(1,2,22,2);
+  g.fillStyle="#e0995e"; g.fillRect(7,4,3,7); g.fillRect(14,4,3,6); /* hanging fish */
+  g.fillStyle="#c9814f"; g.fillRect(8,9,2,3); g.fillRect(15,8,2,3);
+  g.fillStyle="#f3c391"; g.fillRect(7,4,2,3); g.fillRect(14,4,2,3);
+});
+SPRITES.grave=mkSprite(12,14,g=>{
+  shadow(g,6,10,10);
+  g.fillStyle="#8b9196"; g.fillRect(3,2,6,9); g.fillRect(4,0,4,3);
+  g.fillStyle="#9aa1a6"; g.fillRect(3,2,3,8);
+  g.fillStyle="#5d6368"; g.fillRect(7,4,2,7);
+});
+function put(sp,wx,wy,ax,ay){ctx.drawImage(sp,Math.round(wx*T-ax),Math.round(wy*T-ay))}
+
+/* ============================== camera + canvas ============================== */
+const stage=document.getElementById('stage'), cv=document.getElementById('view'), ctx=cv.getContext('2d');
+let dpr=1, cw=0, ch=0;
+const cam={x:campX*T,y:campY*T,zoom:2.6};
+let fitZoom=1;
+function resize(){
+  dpr=window.devicePixelRatio||1;
+  cw=stage.clientWidth; ch=stage.clientHeight;
+  cv.width=Math.round(cw*dpr); cv.height=Math.round(ch*dpr);
+  if(typeof nightCv!=="undefined"){nightCv.width=cv.width;nightCv.height=cv.height}
+  fitZoom=Math.min(cw/(W*T),ch/(H*T));
+  cam.zoom=clamp(cam.zoom,fitZoom*.85,8);
+}
+const nightCv=document.createElement('canvas'), nctx=nightCv.getContext('2d');
+new ResizeObserver(resize).observe(stage); resize();
+cam.zoom=Math.max(fitZoom*2.8,1.8);
+const s2w=(px,py)=>({x:((px-cw/2)/cam.zoom+cam.x)/T, y:((py-ch/2)/cam.zoom+cam.y)/T});
+const w2s=(wx,wy)=>({x:(wx*T-cam.x)*cam.zoom+cw/2, y:(wy*T-cam.y)*cam.zoom+ch/2});
+function clampCam(){cam.x=clamp(cam.x,0,W*T);cam.y=clamp(cam.y,0,H*T)}
+
+/* ============================== input: look around only ============================== */
+const pointers=new Map();
+let pinchD=0, idleT=99;
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('pointerdown',e=>{
+  cv.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId,{x:e.offsetX,y:e.offsetY});
+  idleT=0;
+  if(pointers.size===2){const [a,b]=[...pointers.values()];pinchD=dist(a.x,a.y,b.x,b.y)}
+});
+cv.addEventListener('pointermove',e=>{
+  const p=pointers.get(e.pointerId); if(!p)return;
+  idleT=0;
+  const dx=e.offsetX-p.x, dy=e.offsetY-p.y;
+  p.x=e.offsetX; p.y=e.offsetY;
+  if(pointers.size===2){
+    const [a,b]=[...pointers.values()], d=dist(a.x,a.y,b.x,b.y);
+    if(pinchD>0)cam.zoom=clamp(cam.zoom*(d/pinchD),fitZoom*.85,8);
+    pinchD=d; cam.x-=dx/cam.zoom/2; cam.y-=dy/cam.zoom/2; clampCam(); return;
+  }
+  cam.x-=dx/cam.zoom; cam.y-=dy/cam.zoom; clampCam();
+});
+function endPointer(e){pointers.delete(e.pointerId);if(pointers.size<2)pinchD=0}
+cv.addEventListener('pointerup',endPointer);
+cv.addEventListener('pointercancel',endPointer);
+cv.addEventListener('wheel',e=>{
+  e.preventDefault(); idleT=0;
+  const w0=s2w(e.offsetX,e.offsetY);
+  cam.zoom=clamp(cam.zoom*Math.pow(1.0015,-e.deltaY),fitZoom*.85,8);
+  const w1=s2w(e.offsetX,e.offsetY);
+  cam.x+=(w0.x-w1.x)*T; cam.y+=(w0.y-w1.y)*T; clampCam();
+},{passive:false});
+document.getElementById('speed').addEventListener('click',e=>{
+  const b=e.target.closest('button'); if(!b)return;
+  speed=+b.dataset.s;
+  [...b.parentNode.children].forEach(x=>x.classList.toggle('on',x===b));
+});
+/* gentle wandering eye when the viewer is idle */
+let focusT=0, focus=null;
+function autoCam(rdt){
+  idleT+=rdt;
+  if(idleT<6||speed===0)return;
+  focusT-=rdt;
+  if(focusT<=0||!focus){
+    focusT=11+rand()*6;
+    const burning=[...burn.keys()];
+    if(burning.length&&rand()<.7){const i=pick(burning);focus={x:i%W+.5,y:((i/W)|0)+.5}}
+    else{const alive=V.filter(v=>v.alive);focus=alive.length?pick(alive):{x:campX,y:campY}}
+  }
+  cam.x+=((focus.x*T)-cam.x)*Math.min(1,rdt*.6);
+  cam.y+=((focus.y*T)-cam.y)*Math.min(1,rdt*.6);
+  const zTgt=Math.max(fitZoom*2.8,2.4);
+  cam.zoom+=(zTgt-cam.zoom)*Math.min(1,rdt*.3);
+  clampCam();
+}
+
+/* ============================== effects ============================== */
+function puff(x,y,n,color,spread,up,life){
+  for(let i=0;i<n;i++)particles.push({x:x+(rand()-.5)*spread,y:y+(rand()-.5)*spread,
+    vx:(rand()-.5)*1.2,vy:up?-(.5+rand()):(rand()-.5),life:0,max:life||.9,color,size:2+rand()*2});
+  if(particles.length>420)particles.splice(0,particles.length-420);
+}
+function mood(v,emoji){
+  if(v.moodCd>0)return;
+  v.moodCd=2.5;
+  moods.push({x:v.x,y:v.y-1.1,t:0,max:2.2,emoji});
+  if(moods.length>40)moods.splice(0,moods.length-40);
+}
+function igniteTile(x,y){
+  if(!inMap(x,y))return;
+  const i=idx(x,y), tt=tiles[i];
+  if(burn.has(i))return;
+  if(overlay[i]===OV_TREE)burn.set(i,4.5);
+  else if(tt===GRASS)burn.set(i,1.8);
+  else if(overlay[i]===OV_TENT)burn.set(i,6);
+}
+function killVillager(v,why){
+  v.alive=false;v.state="dead";
+  const gx=Math.round(clamp(v.x,1,W-2)), gy=Math.round(clamp(v.y,1,H-2));
+  if(!overlay[idx(gx,gy)])overlay[idx(gx,gy)]=OV_GRAVE;
+  graves.push({x:gx,y:gy,vi:V.indexOf(v)});
+  log(`💀 <b>${v.name}</b> ${why}. A grave marks the spot.`,"bad");
+}
+function damageVillager(v,amt,why){
+  if(!v.alive)return; v.hp-=amt;
+  if(v.hp<=0)killVillager(v,why);
+}
+
+/* ============================== movement ============================== */
+const DIRS=[[1,0],[1,1],[0,1],[-1,1],[-1,0],[-1,-1],[0,-1],[1,-1]];
+function moveToward(e,tx,ty,sp,dt){
+  const d=dist(e.x,e.y,tx,ty);
+  e.moving=d>.15;
+  if(d<.15)return true;
+  let dx=(tx-e.x)/d, dy=(ty-e.y)/d;
+  let nx=e.x+dx*sp*dt, ny=e.y+dy*sp*dt;
+  if(inMap(Math.floor(nx),Math.floor(ny))&&passable(idx(Math.floor(nx),Math.floor(ny)))){
+    e.x=nx;e.y=ny;e.walk+=dt*sp;e.stuck=0;return d<.3;
+  }
+  let best=null,bd=1e9;
+  for(const[ax,ay]of DIRS){
+    const cx=e.x+ax*sp*dt, cy=e.y+ay*sp*dt;
+    if(!inMap(Math.floor(cx),Math.floor(cy))||!passable(idx(Math.floor(cx),Math.floor(cy))))continue;
+    const dd=dist(cx,cy,tx,ty)+rand()*.3;
+    if(dd<bd){bd=dd;best=[cx,cy]}
+  }
+  if(best){e.x=best[0];e.y=best[1];e.walk+=dt*sp}
+  else e.stuck=(e.stuck||0)+dt;
+  return false;
+}
+function nearest(list,x,y,fn){
+  let b=null,bd=1e9;
+  for(const o of list){if(fn&&!fn(o))continue;const d=dist(o.x,o.y,x,y);if(d<bd){bd=d;b=o}}
+  return b?{o:b,d:bd}:null;
+}
+
+/* ============================== villager brains ============================== */
+function doing(v){
+  switch(v.state){
+    case "idle":case "wander":return "wandering about";
+    case "goto":return {chop:"off to fell a tree",pick:"off to the berry bushes",fish:"walking to the shore",
+      build:"heading to the site",deposit:"hauling goods home",eat:"going to eat by the fire",
+      sleep:"heading home to sleep"}[v.after]||"out for a stroll";
+    case "chop":return "chopping a tree";
+    case "pick":return "picking berries";
+    case "fish":return "fishing the shallows";
+    case "build":return "pitching a tent";
+    case "deposit":return "hauling goods home";
+    case "eat":return "eating by the fire";
+    case "sleep":return "fast asleep";
+    case "flee":return "running for their life!";
+    case "fight":return "fighting!";
+    case "hunt":return "hunting a sheep";
+    case "dead":return "at rest";
+  }
+  return v.state;
+}
+function setGoto(v,x,y,after){v.state="goto";v.tx=x;v.ty=y;v.after=after;v.stuck=0}
+function decide(v){
+  const wolfN=nearest(animals,v.x,v.y,a=>a.kind==="wolf"&&a.hp>0);
+  if(wolfN&&wolfN.d<3.5&&v.role!=="warden"){v.state="flee";v.timer=2.5;mood(v,"😨");return}
+  if(v.role==="warden"&&wolfN&&wolfN.d<9){v.state="fight";v.tgt=wolfN.o;mood(v,"😠");return}
+  if(v.energy<12){v.state="sleep";v.timer=6;return}
+  if(v.hunger>55&&food>=1){setGoto(v,campX+.5,campY+1.2,"eat");return}
+  if(isNight()&&v.energy<85){
+    const h=tents.find(h=>h.progress>=1);
+    if(h){setGoto(v,h.x+.5,h.y+1.3,"sleep")}else{setGoto(v,campX+.5,campY+1.2,"sleep")}
+    return;
+  }
+  switch(v.role){
+    case "builder":{
+      if(v.carryWood>=6){setGoto(v,campX+.5,campY+1.2,"deposit");return}
+      const site=tents.find(h=>h.progress<1);
+      if(site){setGoto(v,site.x+.5,site.y+1.3,"build");v.tgt=site;return}
+      if(wood>=TENT_COST&&tents.length<MAX_TENTS){
+        const p=freeNear(campX,campY,7,i=>tiles[i]===GRASS&&!overlay[i]);
+        if(p){wood-=TENT_COST;const h={x:p.x,y:p.y,progress:0};tents.push(h);overlay[idx(p.x,p.y)]=OV_TENT;
+          setGoto(v,p.x+.5,p.y+1.3,"build");v.tgt=h;log(`🏕 <b>Bram</b> starts pitching a new tent.`,"good");return}
+      }
+      if(wood<40){
+        const tr=nearestTree(v.x,v.y);
+        if(tr){setGoto(v,tr.x+.5,tr.y+1.1,"chop");v.tgt=tr;return}
+      }
+      break}
+    case "forager":{
+      if(v.carryFood>=3){setGoto(v,campX+.5,campY+1.2,"deposit");return}
+      let b=null,bd=1e9;
+      for(const[i,c]of berries){if(c<1)continue;const x=i%W,y=(i/W)|0,d=dist(x,y,v.x,v.y);if(d<bd){bd=d;b={x,y,i}}}
+      if(b){setGoto(v,b.x+.5,b.y+1.1,"pick");v.tgt=b;return}
+      break}
+    case "fisher":{
+      if(v.carryFood>=2){setGoto(v,campX+.5,campY+1.2,"deposit");return}
+      if(shore.length){const sp=shore[Math.floor(rand()*Math.min(10,shore.length))];
+        setGoto(v,sp.x+.5,sp.y+.5,"fish");return}
+      break}
+    case "warden":{
+      if(food<3){const sh=nearest(animals,v.x,v.y,a=>a.kind==="sheep"&&a.hp>0);
+        if(sh&&sh.d<25){v.state="hunt";v.tgt=sh.o;return}}
+      const px=campX+(rand()-.5)*14, py=campY+(rand()-.5)*14;
+      if(inMap(Math.floor(px),Math.floor(py))&&passable(idx(Math.floor(px),Math.floor(py)))){setGoto(v,px,py,null);return}
+      break}
+  }
+  const wx=campX+(rand()-.5)*10, wy=campY+(rand()-.5)*10;
+  if(inMap(Math.floor(wx),Math.floor(wy))&&passable(idx(Math.floor(wx),Math.floor(wy))))setGoto(v,wx,wy,null);
+  else v.state="idle";
+}
+function nearestTree(x,y){
+  let b=null,bd=1e9;
+  const x0=Math.max(1,Math.floor(x-18)),x1=Math.min(W-1,Math.ceil(x+18));
+  const y0=Math.max(1,Math.floor(y-18)),y1=Math.min(H-1,Math.ceil(y+18));
+  for(let ty=y0;ty<y1;ty++)for(let tx=x0;tx<x1;tx++){
+    const i=idx(tx,ty);
+    if(overlay[i]!==OV_TREE||burn.has(i)||treeKind[i]===4)continue;
+    const d=dist(tx,ty,x,y); if(d<bd){bd=d;b={x:tx,y:ty}}
+  }
+  return b;
+}
+function stepVillager(v,dt){
+  if(!v.alive)return;
+  v.moodCd=Math.max(0,(v.moodCd||0)-dt);
+  const wolfClose=nearest(animals,v.x,v.y,a=>a.kind==="wolf"&&a.hp>0);
+  v.hunger=Math.min(100,v.hunger+dt*.55);
+  if(v.state!=="sleep")v.energy=Math.max(0,v.energy-dt*.38);
+  if(v.hunger>=100){v.hp-=dt*2;if(rand()<dt*.2)mood(v,"😖");
+    if(v.hp<=0){killVillager(v,"starved");return}}
+  else if(v.hp<v.maxhp)v.hp=Math.min(v.maxhp,v.hp+dt*.8);
+  const bi=idx(clamp(Math.floor(v.x),0,W-1),clamp(Math.floor(v.y),0,H-1));
+  if(burn.has(bi)){damageVillager(v,dt*10,"burned in the flames");if(rand()<dt)mood(v,"😱");if(!v.alive)return;
+    if(v.state!=="flee"){v.state="flee";v.timer=1.5}}
+  v.moodT-=dt;
+  if(v.moodT<=0&&(v.state==="wander"||v.state==="idle"||v.state==="goto")){
+    mood(v,v.hunger>70?"😟":pick(["😀","😊","🙂","😄","🎵"]));v.moodT=14+rand()*20;
+  }
+  const sp=(v.energy<20?1.0:1.6)*(v.state==="flee"?1.6:1);
+  v.moving=false;
+  switch(v.state){
+    case "idle": decide(v); break;
+    case "goto":{
+      if(moveToward(v,v.tx,v.ty,sp,dt)){
+        const a=v.after; v.after=null;
+        if(a==="chop"){v.state="chop";v.timer=2}
+        else if(a==="pick"){v.state="pick";v.timer=2}
+        else if(a==="fish"){v.state="fish";v.timer=5}
+        else if(a==="build"){v.state="build"}
+        else if(a==="deposit"){v.state="deposit";v.timer=.8}
+        else if(a==="eat"){v.state="eat";v.timer=1.4}
+        else if(a==="sleep"){v.state="sleep";v.timer=999}
+        else v.state="idle";
+      } else if(v.stuck>2){v.state="idle";v.stuck=0}
+      break}
+    case "chop":{
+      const tr=v.tgt;
+      if(!tr||overlay[idx(tr.x,tr.y)]!==OV_TREE){v.state="idle";break}
+      v.timer-=dt; v.swing+=dt;
+      if(v.timer<=0){
+        v.timer=2; v.carryWood+=2; puff(tr.x+.5,tr.y+.5,3,"#a97d4b",.7,false,.5);
+        const hp=(treeHP.get(idx(tr.x,tr.y))??3)-1;
+        if(hp<=0){overlay[idx(tr.x,tr.y)]=OV_NONE;treeHP.delete(idx(tr.x,tr.y));v.state="idle"}
+        else treeHP.set(idx(tr.x,tr.y),hp);
+      }
+      break}
+    case "pick":{
+      const b=v.tgt;
+      if(!b||(berries.get(b.i)||0)<1){v.state="idle";break}
+      v.timer-=dt;
+      if(v.timer<=0){v.timer=2;berries.set(b.i,berries.get(b.i)-1);v.carryFood++;
+        if(v.carryFood>=3)v.state="idle"}
+      break}
+    case "fish":{
+      v.timer-=dt;
+      if(rand()<dt*2)puff(v.x,v.y+.6,1,"#9cc7de",.5,false,.4);
+      if(v.timer<=0){v.carryFood+=2;mood(v,"😋");v.state="idle"}
+      break}
+    case "build":{
+      const h=v.tgt;
+      if(!h||h.progress>=1||!tents.includes(h)){v.state="idle";break}
+      h.progress+=dt/16; v.swing+=dt;
+      if(rand()<dt*3)puff(h.x+.5,h.y+.5,1,"#c9b18a",.8,true,.4);
+      if(h.progress>=1){h.progress=1;log(`⛺ <b>Bram</b> finished a tent. The camp grows.`,"good");v.state="idle"}
+      break}
+    case "deposit":{
+      v.timer-=dt;
+      if(v.timer<=0){
+        if(v.carryWood){wood+=v.carryWood;v.carryWood=0}
+        if(v.carryFood){food+=v.carryFood;v.carryFood=0}
+        v.state="idle";
+      } break}
+    case "eat":{
+      v.timer-=dt;
+      if(rand()<dt)mood(v,"😋");
+      if(v.timer<=0){
+        if(food>=1){food--;v.hunger=Math.max(0,v.hunger-45)}
+        if(v.hunger>35&&food>=1)v.timer=1.4; else v.state="idle";
+      } break}
+    case "sleep":{
+      v.energy=Math.min(100,v.energy+dt*(tents.some(h=>h.progress>=1)?7:4.5));
+      if(rand()<dt*.5)mood(v,"💤");
+      if(v.energy>=99||(!isNight()&&v.energy>55))v.state="idle";
+      if(wolfClose&&wolfClose.d<2.5)v.state="idle";
+      break}
+    case "flee":{
+      v.timer-=dt;
+      const w=wolfClose;
+      let fx,fy;
+      if(w&&w.d<7){fx=v.x+(v.x-w.o.x);fy=v.y+(v.y-w.o.y)}
+      else{fx=campX+.5;fy=campY+.5}
+      moveToward(v,fx,fy,sp,dt);
+      if(v.timer<=0)v.state="idle";
+      break}
+    case "fight":{
+      const w=v.tgt;
+      if(!w||w.hp<=0||!animals.includes(w)){v.state="idle";break}
+      if(dist(v.x,v.y,w.x,w.y)>1.1)moveToward(v,w.x,w.y,sp,dt);
+      else{v.swing+=dt;
+        if(v.swing>.7){v.swing=0;w.hp-=12;puff(w.x,w.y,3,"#e2574c",.5,true,.4);
+          if(w.hp<=0)log(`🗡 <b>Odo</b> slew a wolf.`,"good")}}
+      break}
+    case "hunt":{
+      const s=v.tgt;
+      if(!s||s.hp<=0||!animals.includes(s)){v.state="idle";break}
+      if(dist(v.x,v.y,s.x,s.y)>1)moveToward(v,s.x,s.y,sp,dt);
+      else{s.hp-=dt*25;
+        if(s.hp<=0){v.carryFood+=3;
+          setGoto(v,campX+.5,campY+1.2,"deposit")}}
+      break}
+  }
+}
+
+/* ============================== animal brains ============================== */
+function stepAnimal(a,dt){
+  const sp=a.kind==="wolf"?2.1:1.1;
+  a.moving=false;
+  if(a.kind==="sheep"){
+    const w=nearest(animals,a.x,a.y,o=>o.kind==="wolf"&&o.hp>0);
+    if(w&&w.d<5){moveToward(a,a.x+(a.x-w.o.x),a.y+(a.y-w.o.y),2,dt);return}
+    a.timer-=dt;
+    if(a.timer<=0){a.timer=2+rand()*4;
+      const p=freeNear(Math.round(a.x),Math.round(a.y),5,i=>passable(i)&&tiles[i]===GRASS);
+      if(p)a.tgt=p}
+    if(a.tgt){moveToward(a,a.tgt.x+.5,a.tgt.y+.5,sp*.6,dt);
+      if(dist(a.x,a.y,a.tgt.x+.5,a.tgt.y+.5)<.3)a.tgt=null}
+  } else { /* wolf */
+    if(a.fed>0){a.fed-=dt;
+      a.timer-=dt;
+      if(a.timer<=0){a.timer=2+rand()*3;const p=freeNear(Math.round(a.x),Math.round(a.y),6,i=>passable(i));if(p)a.tgt=p}
+      if(a.tgt)moveToward(a,a.tgt.x+.5,a.tgt.y+.5,sp*.5,dt);
+      return}
+    let prey=nearest(animals,a.x,a.y,o=>o.kind==="sheep"&&o.hp>0);
+    let vict=null,vd=1e9;
+    for(const v of V){if(!v.alive)continue;const d=dist(v.x,v.y,a.x,a.y);if(d<vd){vd=d;vict=v}}
+    const target=(prey&&(!vict||prey.d<vd-2))?{x:prey.o.x,y:prey.o.y,o:prey.o,isV:false}
+                :(vict&&vd<11?{x:vict.x,y:vict.y,o:vict,isV:true}:null);
+    if(target){
+      const d=dist(a.x,a.y,target.x,target.y);
+      if(d>.9)moveToward(a,target.x,target.y,sp,dt);
+      else{a.bite=(a.bite||0)+dt;
+        if(a.bite>.8){a.bite=0;
+          if(target.isV){damageVillager(target.o,9,"was taken by a wolf");if(rand()<.5)mood(target.o,"😱")}
+          else{target.o.hp-=12;
+            if(target.o.hp<=0){a.fed=25;log("🐺 A wolf brought down a sheep.","bad")}}
+        }}
+    } else {
+      a.timer-=dt;
+      if(a.timer<=0){a.timer=2+rand()*3;const p=freeNear(Math.round(a.x),Math.round(a.y),7,i=>passable(i));if(p)a.tgt=p}
+      if(a.tgt)moveToward(a,a.tgt.x+.5,a.tgt.y+.5,sp*.5,dt);
+    }
+  }
+}
+
+/* ============================== weather + nature ============================== */
+function setWeather(w){
+  if(w===weather)return;
+  weather=w;
+  if(w==="rain")log("🌧 Rain drifts over the isle.");
+  else if(w==="storm")log("⛈ A storm rolls over Emberwick!","bad");
+  else log("☀️ The skies clear.");
+}
+function stepWeather(dt){
+  weatherT-=dt;
+  if(weatherT<=0){
+    if(weather==="clear"){setWeather(rand()<.3?"storm":"rain");weatherT=18+rand()*20}
+    else{setWeather("clear");weatherT=70+rand()*90}
+  }
+  if(weather!=="clear"){
+    /* rain douses fire and greens the earth */
+    for(const i of[...burn.keys()])if(rand()<dt*.7){burn.delete(i);
+      puff(i%W+.5,((i/W)|0)+.5,3,"#bcd8e8",.8,true,.6)}
+    for(let n=0;n<3;n++){
+      const x=1+Math.floor(rand()*(W-2)), y=1+Math.floor(rand()*(H-2));
+      if(tiles[idx(x,y)]===DIRT&&rand()<.25)setTile(x,y,GRASS);
+    }
+  }
+  if(weather==="storm"){
+    boltT-=dt;
+    if(boltT<=0){
+      boltT=2.5+rand()*4;
+      for(let tries=0;tries<20;tries++){
+        const x=2+Math.floor(rand()*(W-4)), y=2+Math.floor(rand()*(H-4));
+        if(tiles[idx(x,y)]>=SAND){
+          strikes.push({x:x+.5,y:y+.5,t:.35});
+          if(rand()<.55)igniteTile(x,y);
+          V.forEach(v=>{if(v.alive&&dist(v.x,v.y,x+.5,y+.5)<1.6)damageVillager(v,60,"was struck by lightning")});
+          for(const a of animals)if(dist(a.x,a.y,x+.5,y+.5)<1.6)a.hp-=60;
+          break;
+        }
+      }
+    }
+  }
+}
+function stepNature(dt){
+  for(const[i,fuel]of[...burn]){
+    const x=i%W,y=(i/W)|0;
+    burn.set(i,fuel-dt);
+    if(rand()<dt*1.5)puff(x+.5,y+.2,1,"#5a5550",.6,true,1.4);
+    if(rand()<dt*.9){
+      const[dx,dy]=pick(DIRS);
+      const nx=x+dx,ny=y+dy;
+      if(inMap(nx,ny)){
+        const ni=idx(nx,ny);
+        if(!burn.has(ni)){
+          if(overlay[ni]===OV_TREE&&rand()<.75)igniteTile(nx,ny);
+          else if(tiles[ni]===GRASS&&rand()<.3)igniteTile(nx,ny);
+          else if(overlay[ni]===OV_TENT&&rand()<.4)igniteTile(nx,ny);
+        }
+      }
+    }
+    if(fuel<=0){
+      burn.delete(i);
+      if(overlay[i]===OV_TREE){overlay[i]=OV_NONE;treeHP.delete(i)}
+      if(overlay[i]===OV_BERRY){overlay[i]=OV_NONE;berries.delete(i)}
+      if(overlay[i]===OV_TENT){overlay[i]=OV_NONE;
+        const hi=tents.findIndex(h=>idx(h.x,h.y)===i); if(hi>=0)tents.splice(hi,1);
+        log("🔥 A tent burned away.","bad")}
+      if(tiles[i]===GRASS)setTile(x,y,DIRT);
+    }
+  }
+  regrowT+=dt;
+  if(regrowT>.6){regrowT=0;
+    for(let n=0;n<4;n++){
+      const x=1+Math.floor(rand()*(W-2)), y=1+Math.floor(rand()*(H-2)), i=idx(x,y);
+      if(tiles[i]===DIRT&&rand()<.3)setTile(x,y,GRASS);
+    }
+    for(const[i,c]of berries)if(c<3&&rand()<.06)berries.set(i,c+1);
+  }
+  spreadT+=dt;
+  if(spreadT>2.5){spreadT=0;
+    const x=1+Math.floor(rand()*(W-2)), y=1+Math.floor(rand()*(H-2)), i=idx(x,y);
+    if(overlay[i]===OV_TREE&&!burn.has(i)&&treeKind[i]!==4){
+      const[dx,dy]=pick(DIRS), ni=idx(x+dx,y+dy);
+      if(inMap(x+dx,y+dy)&&tiles[ni]===GRASS&&!overlay[ni]&&rand()<.5){
+        overlay[ni]=OV_TREE;treeKind[ni]=treeKind[i]}
+    }
+  }
+  wildT-=dt;
+  if(wildT<=0){wildT=45+rand()*60;
+    if(animals.filter(a=>a.kind==="sheep").length<3&&rand()<.7){
+      const p=freeNear(campX,campY,22,i=>tiles[i]===GRASS&&!overlay[i]);
+      if(p){spawnAnimal("sheep",p.x,p.y);log("🐑 A wild sheep wandered onto the isle.")}
+    } else if(animals.filter(a=>a.kind==="wolf").length<1&&day()>2&&rand()<.5){
+      const p=freeNear(rand()<.5?12:W-12,rand()<.5?12:H-12,10,i=>passable(i));
+      if(p){spawnAnimal("wolf",p.x,p.y);log("🐺 A wolf's howl carries over the water…","bad")}
+    }
+  }
+  for(let i=animals.length-1;i>=0;i--)if(animals[i].hp<=0)animals.splice(i,1);
+}
+
+/* ============================== simulation loop ============================== */
+let acc=0, dayLast=1;
+function stepSim(dt){
+  t0+=dt;
+  if(day()!==dayLast){
+    dayLast=day();
+    log(`— <b>Day ${dayLast}</b> dawns over Emberwick.`);
+    /* the isle does not stay grieving: the lost return at first light */
+    for(let gi=graves.length-1;gi>=0;gi--){
+      const g=graves[gi], v=V[g.vi];
+      if(overlay[idx(g.x,g.y)]===OV_GRAVE)overlay[idx(g.x,g.y)]=OV_NONE;
+      graves.splice(gi,1);
+      v.alive=true;v.hp=v.maxhp*.6;v.hunger=45;v.energy=60;
+      v.x=campX+.5+(rand()-.5);v.y=campY+1.5;v.state="idle";v.after=null;
+      puff(v.x,v.y,12,"#ffd98a",1.2,true,1.1);
+      log(`✨ At dawn, <b>${v.name}</b> walks back into camp, as if from a dream.`,"god");
+    }
+  }
+  for(const v of V)stepVillager(v,dt);
+  for(const a of animals)stepAnimal(a,dt);
+  stepWeather(dt);
+  stepNature(dt);
+  for(let i=particles.length-1;i>=0;i--){
+    const p=particles[i]; p.life+=dt;
+    p.x+=p.vx*dt; p.y+=p.vy*dt;
+    if(p.life>=p.max)particles.splice(i,1);
+  }
+  for(let i=moods.length-1;i>=0;i--){
+    const m=moods[i]; m.t+=dt; m.y-=dt*.45;
+    if(m.t>=m.max)moods.splice(i,1);
+  }
+  for(let i=strikes.length-1;i>=0;i--){strikes[i].t-=dt;if(strikes[i].t<=0)strikes.splice(i,1)}
+}
+
+/* ============================== drawing ============================== */
+function px(x,y,w,h,c){ctx.fillStyle=c;ctx.fillRect(x,y,w,h)}
+const TREE_SPR=[SPRITES.treeGreen,SPRITES.treeOrange,SPRITES.treeMixed,SPRITES.baobab,SPRITES.palm,SPRITES.deadTree];
+function drawCampfire(nowS){
+  const X=campX*T+T/2, Y=campY*T+T/2;
+  ctx.fillStyle="rgba(70,45,15,.35)"; ctx.fillRect(X-9,Y+5,18,4);
+  ctx.fillStyle="#8b9196";
+  ctx.fillRect(X-8,Y+2,3,3); ctx.fillRect(X+5,Y+2,3,3); ctx.fillRect(X-8,Y-3,3,3);
+  ctx.fillRect(X+5,Y-3,3,3); ctx.fillRect(X-2,Y+4,4,3); ctx.fillRect(X-2,Y-5,4,3);
+  ctx.fillStyle="#5c4226"; ctx.fillRect(X-6,Y,12,4); ctx.fillRect(X-4,Y-2,8,3);
+  const f=Math.sin(nowS*11)*1.2, g=Math.sin(nowS*17+2)*1.2;
+  ctx.fillStyle="#e0561f"; ctx.fillRect(X-5,Y-6-f,10,8+f);
+  ctx.fillStyle="#f2842c"; ctx.fillRect(X-3,Y-9-g,6,10+g);
+  ctx.fillStyle="#f7c343"; ctx.fillRect(X-2,Y-5-f,4,6+f);
+}
+function drawFireTile(i,nowS){
+  const x=i%W,y=(i/W)|0, X=x*T, Y=y*T, f=Math.sin(nowS*13+i)*1.5, g=Math.sin(nowS*17+i*3)*1.5;
+  ctx.fillStyle="#e0561f"; ctx.fillRect(X+2,Y+6-f*2,6,8+f*2); ctx.fillRect(X+8,Y+4-g*2,6,10+g*2);
+  ctx.fillStyle="#f2842c"; ctx.fillRect(X+4,Y+3-g,5,9+g);
+  ctx.fillStyle="#f7c343"; ctx.fillRect(X+6,Y+7-f,4,6+f);
+}
+function drawPerson(v,nowS){
+  const X=v.x*T, Y=v.y*T, bob=v.moving?Math.sin(v.walk*8)*1.2:0;
+  ctx.fillStyle="rgba(0,0,0,.28)"; ctx.fillRect(X-4,Y+4,9,2);
+  px(X-4,Y-2+bob,8,6,v.tunic);
+  ctx.fillStyle="rgba(255,255,255,.15)"; ctx.fillRect(X-4,Y-2+bob,3,6);
+  px(X-4,Y+4,2,3,"#3a3128"); px(X+2,Y+4,2,3,"#3a3128");
+  px(X-4,Y-8+bob,8,6,"#e8c39a");
+  px(X-4,Y-10+bob,8,2,v.hair); px(X-4,Y-8+bob,2,2,v.hair);
+  px(X-2,Y-6+bob,1,1,"#2a2118"); px(X+1,Y-6+bob,1,1,"#2a2118");
+  if(v.role==="warden"){px(X+4,Y-4+bob,2,7,"#b8bdc2");px(X+3,Y-5+bob,4,2,"#8a6a44")}
+  if(v.carryWood>0){px(X-7,Y-5+bob,3,8,"#8a5f33");px(X-7,Y-5+bob,3,2,"#a97d4b")}
+  if(v.state==="chop"||v.state==="build"){
+    const sw=Math.sin(v.swing*9)>0;
+    px(X+4,Y-5+(sw?0:2)+bob,4,2,"#8a6a44"); px(X+7,Y-6+(sw?0:2)+bob,2,3,"#9aa0a5");
+  }
+}
+function drawAnimal(a){
+  const X=a.x*T, Y=a.y*T, bob=a.moving?Math.sin((a.walk||0)*8)*1:0;
+  ctx.fillStyle="rgba(0,0,0,.22)"; ctx.fillRect(X-4,Y+4,10,2);
+  if(a.kind==="sheep"){
+    px(X-4,Y-2+bob,10,6,"#efece3"); px(X-3,Y-3+bob,8,2,"#f7f5ee");
+    px(X-6,Y-4+bob,4,4,"#3a3531"); px(X-7,Y-3+bob,2,2,"#3a3531");
+    px(X-3,Y+4,2,2,"#3a3531"); px(X+3,Y+4,2,2,"#3a3531");
+  } else {
+    px(X-4,Y-2+bob,10,5,"#6d6f73"); px(X-3,Y-3+bob,7,2,"#7d7f83");
+    px(X+4,Y-4+bob,4,4,"#7d7f83"); px(X+7,Y-3+bob,2,2,"#5d5f63");
+    px(X-6,Y-2+bob,2,2,"#5d5f63");
+    px(X-3,Y+2,2,3,"#4d4f53"); px(X+2,Y+2,2,3,"#4d4f53");
+    px(X+5,Y-3+bob,1,1,"#e2574c");
+  }
+}
+let last=performance.now();
+function frame(now){
+  requestAnimationFrame(frame);
+  const rdt=Math.min(.1,(now-last)/1000); last=now;
+  if(running&&speed>0){
+    acc+=rdt*speed;
+    let n=0;
+    while(acc>=.05&&n<60){stepSim(.05);acc-=.05;n++}
+  }
+  autoCam(rdt);
+  const nowS=now/1000;
+  /* --- world pass --- */
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle="#2a64b4"; ctx.fillRect(0,0,cw,ch);
+  ctx.translate(cw/2,ch/2); ctx.scale(cam.zoom,cam.zoom); ctx.translate(-cam.x,-cam.y);
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(terrain,0,0);
+  /* painter-sorted props + creatures */
+  const items=[];
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=idx(x,y), o=overlay[i];
+    if(o===OV_TREE)items.push({y:y+1,f:()=>put(TREE_SPR[treeKind[i]],x+.5,y+1,
+      treeKind[i]===3?15:14,treeKind[i]===3?38:treeKind[i]===4?32:34)});
+    else if(o===OV_BERRY)items.push({y:y+1,f:()=>put((berries.get(i)||0)>0?SPRITES.berry:SPRITES.berryEmpty,x+.5,y+1,10,15)});
+    else if(o===OV_GRAVE)items.push({y:y+1,f:()=>put(SPRITES.grave,x+.5,y+1,6,13)});
+  }
+  for(const r of rocks)items.push({y:r.y+1,f:()=>put(r.big?SPRITES.rockBig:SPRITES.rock,r.x+.5,r.y+1,r.big?11:9,r.big?15:11)});
+  for(const h of tents)items.push({y:h.y+1,f:()=>put(h.progress<1?SPRITES.tentHalf:SPRITES.tent,h.x+.5,h.y+1,13,22)});
+  if(rack)items.push({y:rack.y+1,f:()=>put(SPRITES.rack,rack.x+.5,rack.y+1,12,16)});
+  items.push({y:campY+1,f:()=>drawCampfire(nowS)});
+  for(const a of animals)items.push({y:a.y,f:()=>drawAnimal(a)});
+  for(const v of V)if(v.alive)items.push({y:v.y,f:()=>drawPerson(v,nowS)});
+  items.sort((p,q)=>p.y-q.y);
+  for(const it of items)it.f();
+  for(const i of burn.keys())drawFireTile(i,nowS);
+  /* particles */
+  for(const p of particles){
+    ctx.globalAlpha=1-p.life/p.max;
+    ctx.fillStyle=p.color; ctx.fillRect(p.x*T,p.y*T,p.size,p.size);
+  }
+  ctx.globalAlpha=1;
+  /* mood emoji */
+  ctx.font="10px sans-serif"; ctx.textAlign="center"; ctx.textBaseline="middle";
+  for(const m of moods){
+    const a=m.t<.3?m.t/.3:m.t>m.max-.6?(m.max-m.t)/.6:1;
+    ctx.globalAlpha=clamp(a,0,1);
+    ctx.fillText(m.emoji,m.x*T+Math.sin(m.t*3)*2,m.y*T);
+  }
+  ctx.globalAlpha=1;
+  /* lightning */
+  for(const s of strikes){
+    ctx.strokeStyle=`rgba(255,240,190,${s.t/.35})`; ctx.lineWidth=2;
+    ctx.beginPath();
+    let lx=s.x*T, ly=s.y*T-160;
+    ctx.moveTo(lx,ly);
+    for(let seg=0;seg<6;seg++){lx+=(rand()-.5)*18; ly+=27; ctx.lineTo(seg===5?s.x*T:lx,seg===5?s.y*T:ly)}
+    ctx.stroke();
+    ctx.fillStyle=`rgba(255,240,190,${s.t*1.4})`;
+    ctx.beginPath(); ctx.arc(s.x*T,s.y*T,7,0,7); ctx.fill();
+  }
+  /* --- night overlay with warm light holes (own layer) --- */
+  const dark=(1-daylight())*.62;
+  if(dark>.03){
+    nctx.setTransform(1,0,0,1,0,0);
+    nctx.clearRect(0,0,nightCv.width,nightCv.height);
+    nctx.setTransform(dpr,0,0,dpr,0,0);
+    nctx.fillStyle=`rgba(9,14,38,${dark})`;
+    nctx.fillRect(0,0,cw,ch);
+    nctx.globalCompositeOperation="destination-out";
+    const lights=[{x:campX+.5,y:campY+.4,r:5}];
+    for(const i of burn.keys())lights.push({x:i%W+.5,y:((i/W)|0)+.5,r:3.5});
+    for(const l of lights){
+      const s=w2s(l.x,l.y), r=Math.max(1,l.r*T*cam.zoom);
+      const g=nctx.createRadialGradient(s.x,s.y,0,s.x,s.y,r);
+      g.addColorStop(0,"rgba(0,0,0,1)"); g.addColorStop(.55,"rgba(0,0,0,.75)"); g.addColorStop(1,"rgba(0,0,0,0)");
+      nctx.fillStyle=g; nctx.beginPath(); nctx.arc(s.x,s.y,r,0,7); nctx.fill();
+    }
+    nctx.globalCompositeOperation="source-over";
+    ctx.setTransform(1,0,0,1,0,0);
+    ctx.drawImage(nightCv,0,0);
+  }
+  /* --- rain, screen space --- */
+  if(weather!=="clear"){
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    ctx.fillStyle="rgba(30,50,90,.12)"; ctx.fillRect(0,0,cw,ch);
+    ctx.strokeStyle="rgba(190,220,240,.35)"; ctx.lineWidth=1;
+    const n=weather==="storm"?150:90, sc=(nowS*(weather==="storm"?900:600))%ch;
+    ctx.beginPath();
+    for(let i=0;i<n;i++){
+      const rx=(hash(i,7)*cw+nowS*40)%cw, ry=(hash(i,13)*ch+sc)%ch;
+      ctx.moveTo(rx,ry); ctx.lineTo(rx-3,ry+10);
+    }
+    ctx.stroke();
+  }
+  uiTimer-=rdt; if(uiTimer<=0){uiTimer=.25;refreshStats();refreshCards()}
+}
+let uiTimer=0;
+
+/* ============================== character cards ============================== */
+const side=document.getElementById('side');
+let selected=-1;
+const cardEls=V.map((v,i)=>{
+  const el=document.createElement('div');
+  el.className='card';
+  el.innerHTML=`<div class="top"><canvas width="12" height="12"></canvas>
+    <div class="who"><div class="name">${v.name}</div><div class="role">${
+      {builder:"Builder — timber & tents",forager:"Forager — berries",fisher:"Fisher — the shallows",warden:"Warden — sword & watch"}[v.role]
+    }</div></div></div>
+    <div class="bars">
+      <div class="bar hp" title="Health"><i></i></div>
+      <div class="bar belly" title="Belly"><i></i></div>
+      <div class="bar zz" title="Energy"><i></i></div>
+    </div>
+    <div class="doing"></div>`;
+  el.onclick=()=>{selected=i;idleT=0;cam.x=v.x*T;cam.y=v.y*T;cam.zoom=Math.max(cam.zoom,3);clampCam()};
+  side.appendChild(el);
+  const pc=el.querySelector('canvas').getContext('2d');
+  pc.fillStyle="#101c23"; pc.fillRect(0,0,12,12);
+  pc.fillStyle=v.tunic; pc.fillRect(4,5,4,3);
+  pc.fillStyle="#e8c39a"; pc.fillRect(4,2,4,3);
+  pc.fillStyle=v.hair; pc.fillRect(4,1,4,1); pc.fillRect(4,2,1,1);
+  pc.fillStyle="#3a3128"; pc.fillRect(4,8,1,2); pc.fillRect(7,8,1,2);
+  return el;
+});
+function refreshCards(){
+  V.forEach((v,i)=>{
+    const el=cardEls[i];
+    el.classList.toggle('sel',selected===i);
+    el.classList.toggle('dead',!v.alive);
+    el.querySelector('.bar.hp i').style.width=(v.alive?100*v.hp/v.maxhp:0)+"%";
+    el.querySelector('.bar.belly i').style.width=(v.alive?100-v.hunger:0)+"%";
+    el.querySelector('.bar.zz i').style.width=(v.alive?v.energy:0)+"%";
+    el.querySelector('.doing').textContent=v.alive?doing(v):"☠ gone… until dawn";
+  });
+}
+refreshCards();
+
+/* ============================== begin ============================== */
+log("Dawn over <b>Emberwick Isle</b>. Four small lives go about their day.","god");
+const splash=document.getElementById('splash');
+setTimeout(()=>{splash.classList.add('bye');setTimeout(()=>splash.remove(),1800)},3800);
+requestAnimationFrame(frame);
+</script>
