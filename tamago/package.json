@@ -1,0 +1,31 @@
+{
+  "name": "tamago",
+  "version": "0.1.0",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "^2.2.0",
+    "expo": "~57.0.4",
+    "expo-camera": "~57.0.4",
+    "expo-file-system": "~57.0.6",
+    "expo-status-bar": "~57.0.1",
+    "react": "^19.2.3",
+    "react-native": "^0.86.3",
+    "react-native-safe-area-context": "~5.7.0"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "babel-preset-expo": "~57.0.2",
+    "typescript": "~6.0.3",
+    "vitest": "^4.1.10"
+  },
+  "private": true
+}
