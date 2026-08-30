@@ -16,13 +16,13 @@ import { colors } from "../theme";
 interface Props {
   /** Called with the persisted face photo URI and chosen name. */
   onDone: (faceUri: string, name: string) => void;
-  /** When re-scanning an existing pet, the name is kept and hidden. */
+  /** When re-scanning an existing tiny human, the name is kept and hidden. */
   existingName?: string;
 }
 
 /**
  * Onboarding: line your face up inside the oval, snap a selfie, and that
- * photo becomes your pet's face. The photo stays on-device.
+ * photo becomes your tiny human's face. The photo stays on-device.
  */
 export default function ScanScreen({ onDone, existingName }: Props) {
   const [permission, requestPermission] = useCameraPermissions();
@@ -59,8 +59,8 @@ export default function ScanScreen({ onDone, existingName }: Props) {
       <View style={styles.center}>
         <Text style={styles.title}>Say cheese! 📸</Text>
         <Text style={styles.subtitle}>
-          Tamago needs the front camera to scan your face so your pet looks like you. The photo
-          never leaves your phone.
+          Tamago needs the front camera to scan your face so your tiny human looks like you. The
+          photo never leaves your phone.
         </Text>
         <Pressable style={styles.primaryButton} onPress={requestPermission}>
           <Text style={styles.primaryButtonText}>Allow camera</Text>
@@ -72,12 +72,12 @@ export default function ScanScreen({ onDone, existingName }: Props) {
   if (photoUri) {
     return (
       <View style={styles.center}>
-        <Text style={styles.title}>{existingName ? "Looking good!" : "Meet your pet!"}</Text>
+        <Text style={styles.title}>{existingName ? "Looking good!" : "Meet your tiny you!"}</Text>
         <Image source={{ uri: photoUri }} style={styles.preview} />
         {!existingName && (
           <TextInput
             style={styles.nameInput}
-            placeholder="Name your pet…"
+            placeholder="Name your tiny human…"
             placeholderTextColor={colors.muted}
             value={name}
             onChangeText={setName}
@@ -85,7 +85,9 @@ export default function ScanScreen({ onDone, existingName }: Props) {
           />
         )}
         <Pressable style={styles.primaryButton} onPress={confirm}>
-          <Text style={styles.primaryButtonText}>{existingName ? "Use this face" : "Hatch 🥚"}</Text>
+          <Text style={styles.primaryButtonText}>
+            {existingName ? "Use this face" : "Bring to life ✨"}
+          </Text>
         </Pressable>
         <Pressable onPress={() => setPhotoUri(null)}>
           <Text style={styles.retake}>Retake</Text>

@@ -2,7 +2,7 @@ import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import Pet from "../components/Pet";
+import TinyHuman from "../components/TinyHuman";
 import StatBar from "../components/StatBar";
 import { Action, PetState, level, mood, stage } from "../state/petLogic";
 import { colors } from "../theme";
@@ -36,7 +36,9 @@ export default function HomeScreen({ pet, onAction, onRescan }: Props) {
       </View>
 
       <View style={styles.stage}>
-        {pet.faceUri && <Pet faceUri={pet.faceUri} mood={currentMood} stage={currentStage} />}
+        {pet.faceUri && (
+          <TinyHuman faceUri={pet.faceUri} mood={currentMood} stage={currentStage} />
+        )}
       </View>
 
       <View style={styles.card}>

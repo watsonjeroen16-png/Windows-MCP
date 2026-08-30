@@ -13,7 +13,7 @@
       "supportsTablet": false,
       "bundleIdentifier": "com.prototype.tamago",
       "infoPlist": {
-        "NSCameraUsageDescription": "Tamago uses the front camera to scan your face so your pet looks like you. The photo never leaves your device."
+        "NSCameraUsageDescription": "Tamago uses the front camera to scan your face so your tiny human looks like you. The photo never leaves your device."
       }
     },
     "android": {
@@ -24,7 +24,7 @@
       [
         "expo-camera",
         {
-          "cameraPermission": "Tamago uses the front camera to scan your face so your pet looks like you. The photo never leaves your device."
+          "cameraPermission": "Tamago uses the front camera to scan your face so your tiny human looks like you. The photo never leaves your device."
         }
       ]
     ]
